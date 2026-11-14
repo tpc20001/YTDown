@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.17';
+const UI_VER = 'YTD_UI_V0.1.18';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.18', ['剪貼簿提示的「加入」按鈕變大、改成醒目的藍色', '縮圖完整顯示不裁切：橫式影片整張看得到，直式影片左右留黑邊']],
   ['YTD_UI_V0.1.17', ['選「最好」時會標出實際畫質（例如：最好 1080p），下載卡片和紀錄都會記下來', '沒先解析就下載的（一次貼很多個、分享直接下載），也會自動補上標題、縮圖和畫質']],
   ['YTD_UI_V0.1.16', ['有新版本會主動提醒：開 App、回到 App、每 30 分鐘各檢查一次，下載頁上方會出現「有新版本」', '下載速度和剩餘時間改成平均值（看最近 12 秒），每秒更新一次，不再亂跳', '下載完成會顯示總共花了多久']],
   ['YTD_UI_V0.1.14', ['打字就能搜尋 YouTube、Bilibili、SoundCloud，點結果直接解析', '在 App 裡登入網站（Bilibili、IG、FB、X、TikTok…），下載需要登入的內容', '從電腦匯入 cookies.txt（YouTube 登入用）', '選存檔資料夾（可以存到 SD 卡）', '只下載一段、依章節切成多個檔、只抓封面圖、跳過贊助片段', '只用 Wi-Fi、加速下載、限速、代理、自訂參數', '分享進來直接下載、完成震動、長按圖示「貼上下載」', 'App 關掉也繼續下載，重開會接回', 'App 內就能更新外殼 APK；設定和紀錄可以匯出、還原', '紀錄可以刪掉檔案本身']],

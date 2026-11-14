@@ -172,3 +172,13 @@ select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-
 .ok-t{color:var(--ok);font-size:11.5px}
 .ask.inset{margin:0 14px 12px}
 .card.gone{opacity:.6}
+
+/* ---- V0.1.18 ---- */
+/* 縮圖：固定 16:9 的框，整張圖完整顯示不裁切（直式影片左右留黑邊） */
+.thumb{align-self:flex-start}
+img.thumb{object-fit:contain;background:#000}
+.card .thumb{width:112px}
+/* 剪貼簿／新版本提示：按鈕大一點、主按鈕用醒目的藍色 */
+.clip{border-width:2px;padding:12px}
+.clip .btn{padding:10px 14px;font-size:14px}
+#clipAdd,.clip .btn.primary{background:var(--acc);border-color:var(--acc);color:#04121b;font-weight:800;font-size:16px;padding:11px 22px}
