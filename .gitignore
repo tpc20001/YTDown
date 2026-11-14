@@ -1,0 +1,6 @@
+# 簽章鑰匙絕對不要放上 GitHub（用 Secrets）
+keystore/
+app/build/
+.gradle/
+local.properties
+*.apk

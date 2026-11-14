@@ -1,0 +1,46 @@
+# GitHub 雲端打包：推到 main（或在 Actions 頁按 Run workflow）就會自動做出 APK 和畫面更新包，
+# 放到 Releases，手機打開 GitHub 就能下載；App 設定裡的「外殼更新」也能直接抓。
+# 需要先在 repo 的 Settings → Secrets → Actions 加一個 KEYSTORE_B64（ytd.jks 轉成 base64），
+# 這樣打出來的 APK 才跟你手機上的同一把鑰匙，能直接覆蓋安裝。
+name: Build YT Download
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.7' }
+      - name: 放上簽章鑰匙
+        env: { KEYSTORE_B64: '${{ secrets.KEYSTORE_B64 }}' }
+        run: |
+          mkdir -p keystore
+          if [ -n "$KEYSTORE_B64" ]; then echo "$KEYSTORE_B64" | base64 -d > keystore/ytd.jks; else echo "::warning::沒有 KEYSTORE_B64，會用臨時鑰匙，手機上要先移除舊版才能裝"; fi
+      - name: 讀版本
+        id: v
+        run: |
+          echo "shell=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)" >> $GITHUB_OUTPUT
+          echo "ui=$(tr -d '\r\n' < app/src/main/assets/www/version.txt)" >> $GITHUB_OUTPUT
+      - name: 打包 APK
+        run: gradle assembleRelease --no-daemon --console=plain
+      - name: 整理檔案
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/release/*.apk "out/${{ steps.v.outputs.shell }}.apk"
+          (cd app/src/main/assets && zip -r "../../../../out/${{ steps.v.outputs.ui }}.zip" www)
+          printf '{"ver":"%s","zip":"%s.zip","shell":"%s","apk":"%s.apk"}\n' "${{ steps.v.outputs.ui }}" "${{ steps.v.outputs.ui }}" "${{ steps.v.outputs.shell }}" "${{ steps.v.outputs.shell }}" > out/update.json
+      - uses: actions/upload-artifact@v4
+        with: { name: '${{ steps.v.outputs.shell }}', path: out/ }
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: '${{ steps.v.outputs.shell }}-${{ steps.v.outputs.ui }}'
+          name: '${{ steps.v.outputs.shell }} / ${{ steps.v.outputs.ui }}'
+          files: out/*
+          make_latest: true

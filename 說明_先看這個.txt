@@ -1,0 +1,48 @@
+﻿YT Download（YTD_V0.1.06）使用說明
+
+這版是「最後一次大改外殼」，之後大部分新功能都用畫面更新包加，或用 GitHub 雲端打包，不用再開電腦。
+
+【安裝（這次還要用電腦一次）】
+1. 解壓縮，蓋掉舊的 YTDown 資料夾。一定要留著 keystore\ytd.jks（簽章鑰匙）。
+2. 點兩下 BUILD_APK.bat，等它做出 桌面\YTDown\YTD_V0.1.06.apk。
+3. 傳到手機安裝，會直接蓋過舊版，資料都還在。
+4. 打開 App → 設定 → 下載核心，看到「JS 引擎 ✓」→ 按「更新下載核心」。
+5. 設定 → 手機權限：通知按「設定」允許；「不要省電限制」也按設定允許（長時間下載才不會被暫停）。
+※ 打包失敗：把視窗裡紅色的錯誤訊息貼給 Claude。
+
+【順便設定 GitHub（之後就不用開電腦）】
+1. 手機上到 github.com 註冊、建一個叫 YTDown 的 repository。
+2. 在 claude.ai 設定 → Connectors 連接 GitHub，跟 Claude 說帳號名稱，Claude 會把程式推上去。
+3. 電腦上點兩下 MAKE_GITHUB_KEY.bat，鑰匙會變成一串文字複製好。
+   到 GitHub 的 repo → Settings → Secrets and variables → Actions → New repository secret，
+   名稱 KEYSTORE_B64，內容貼上 → Add secret。完成後把桌面的 KEYSTORE_B64.txt 刪掉。
+4. 之後每次更新，GitHub 會自動打包，放在 repo 的 Releases。
+   repo 設成公開的話，App 設定 → App 更新 填 update.json 網址，就能一鍵檢查、安裝新外殼。
+
+【這版新功能】
+下載
+- 打字就能搜尋 YouTube、Bilibili、SoundCloud，點結果直接解析
+- 「逛網站」：在 App 裡逛網站，看到影片按「下載這頁」
+- 只下載一段（例如 1:20 到 2:45）、依章節切成多個檔、只抓封面圖、YouTube 跳過贊助片段
+- App 關掉也會繼續下載，重開會接回進度；通知列會顯示下載進度
+登入
+- 平台頁按「登入」，在 App 裡登入 Bilibili、IG、FB、X、TikTok、抖音、微博、Niconico…
+- YouTube／Google 可能不讓 App 內登入：電腦瀏覽器用擴充套件（例如 Get cookies.txt LOCALLY）匯出 cookies.txt，
+  傳到手機，平台頁 →「選 cookies.txt」匯入
+存檔
+- 設定可以選任何資料夾（包括 SD 卡）、打開資料夾
+- 紀錄頁可以直接刪掉手機裡的檔案
+網路
+- 只用 Wi-Fi 下載、加速下載（aria2）、限速、代理伺服器、自訂 yt-dlp 參數
+方便
+- 分享進來直接下載（不預覽）、完成震動
+- 長按 App 圖示：「貼上下載」「逛網站」
+- 下載核心可選穩定版或測試版（YouTube 出狀況時測試版修得最快）
+更新與備份
+- App 內就能安裝新外殼 APK（從 update.json 或 APK 網址）
+- 設定和紀錄可以匯出、還原（存在 下載/YTDown）
+
+【畫面更新（不用電腦）】
+- 畫面更新包 YTD_UI_V0.1.xx.zip：手機 App → 設定 → App 更新 → 選畫面更新包。
+
+【版本】外殼 YTD_V0.1.06／畫面 YTD_UI_V0.1.14
