@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.16';
+const UI_VER = 'YTD_UI_V0.1.17';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.17', ['選「最好」時會標出實際畫質（例如：最好 1080p），下載卡片和紀錄都會記下來', '沒先解析就下載的（一次貼很多個、分享直接下載），也會自動補上標題、縮圖和畫質']],
   ['YTD_UI_V0.1.16', ['有新版本會主動提醒：開 App、回到 App、每 30 分鐘各檢查一次，下載頁上方會出現「有新版本」', '下載速度和剩餘時間改成平均值（看最近 12 秒），每秒更新一次，不再亂跳', '下載完成會顯示總共花了多久']],
   ['YTD_UI_V0.1.14', ['打字就能搜尋 YouTube、Bilibili、SoundCloud，點結果直接解析', '在 App 裡登入網站（Bilibili、IG、FB、X、TikTok…），下載需要登入的內容', '從電腦匯入 cookies.txt（YouTube 登入用）', '選存檔資料夾（可以存到 SD 卡）', '只下載一段、依章節切成多個檔、只抓封面圖、跳過贊助片段', '只用 Wi-Fi、加速下載、限速、代理、自訂參數', '分享進來直接下載、完成震動、長按圖示「貼上下載」', 'App 關掉也繼續下載，重開會接回', 'App 內就能更新外殼 APK；設定和紀錄可以匯出、還原', '紀錄可以刪掉檔案本身']],
   ['YTD_V0.1.06（外殼）', ['下載引擎跟畫面分開，App 關掉也繼續', '登入／瀏覽頁、自選資料夾、APK 自我更新、aria2 加速、萬用指令接口、捷徑、刪檔、網路與權限狀態', '之後大部分新功能都能用畫面更新包加，不用再開電腦']],
@@ -69,6 +70,9 @@ const fmtSize = b => { b = +b || 0; if (b <= 0) return ''; const u = ['B', 'KB',
 const fmtEta = s => { s = +s || 0; if (s <= 0) return ''; return s >= 3600 ? Math.floor(s / 3600) + ' 時 ' + Math.floor(s % 3600 / 60) + ' 分' : s >= 60 ? Math.floor(s / 60) + ' 分 ' + (s % 60) + ' 秒' : s + ' 秒'; };
 const fmtTime = t => new Date(t).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 const qLabel = m => { const q = QUALS.find(x => x[0] == m); return q ? q[1] : (m + 'p'); };
+// 實際會拿到的畫質：選「最好」＝影片最高的；選的比影片高，就只有影片最高的
+const resFor = (q, max) => !max ? 0 : isNaN(+q) ? (q === 'best' ? max : 0) : Math.min(+q, max);
+const qShow = (q, res) => ['audio', 'mp3', 'thumb'].includes(q) || !res ? qLabel(q) : (q === 'best' ? '最好 ' : '') + res + 'p';
 const thumbImg = (src, cls) => src ? `<img class="${cls || 'thumb'}" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">` : `<div class="${cls || 'thumb'}"></div>`;
 function copyText(t) { if (has('copy')) { N.copy(t); toast('已複製'); return; } try { navigator.clipboard.writeText(t).then(() => toast('已複製'), () => toast('複製失敗')); } catch (e) { toast('複製失敗'); } }
 function parseTime(t) { t = String(t || '').trim(); if (!t) return null; if (/^\d+(\.\d+)?$/.test(t)) return +t; const p = t.split(':').map(Number); if (p.some(isNaN)) return NaN; return p.reduce((a, b) => a * 60 + b, 0); }
@@ -242,7 +246,17 @@ function probe(u, k) {
   else N.probe(probeId, u, JSON.stringify([...(triesFor(u)[k] || []), ['--ignore-no-formats-error']]));
 }
 window.onInfo = s => {
-  const p = JSON.parse(s); if (p.id !== probeId) return;
+  const p = JSON.parse(s);
+  if (String(p.id).startsWith('qi:')) {   // 佇列裡沒先解析的工作：補上標題、縮圖、實際畫質
+    const j = Q.find(x => x.id === p.id.slice(3)); if (!j || !p.ok) return;
+    if (!j.title) j.title = p.title; if (!j.thumb) j.thumb = p.thumb;
+    if (p.heights && p.heights.length) j.res = resFor(j.q, p.heights[0]);
+    const el = document.getElementById(j.id); if (el) el.dataset.st = '';
+    drawCard(j); saveQ();
+    if (['ok', 'bad'].includes(j.state)) { const H = LS('hist') || [], h = H.find(x => x.u === j.url && !x.res); if (h) { h.res = j.res; if (!h.thumb) h.thumb = j.thumb; LS('hist', H); } }
+    return;
+  }
+  if (p.id !== probeId) return;
   if (!p.ok && probeK + 1 < triesFor(probeUrl).length) { probe(probeUrl, probeK + 1); return; }
   info = p.ok ? Object.assign(p, { url: probeUrl, k: probeK }) : { err: friendly(p.msg, siteOf(probeUrl).k), url: probeUrl };
   if (p.ok && p.isList) sel.playlist = S.playlist;
@@ -287,7 +301,7 @@ function drawQual() {
   if (!isThumb) more.push(['chapters', '依章節切成多個檔' + (info && info.ok && !(info.chapters || []).length ? '（這部沒有章節）' : '')]);
   $('#moreChips').innerHTML = more.map(o => `<button class="chip" type="button" data-o="${o[0]}" aria-pressed="${!!sel[o[0]]}">${sel[o[0]] ? '✓ ' : ''}${esc(o[1])}</button>`).join('');
   $('#moreChips').querySelectorAll('.chip').forEach(b => b.onclick = () => { sel[b.dataset.o] = !sel[b.dataset.o]; drawQual(); });
-  $('#bGo').textContent = L.length > 1 ? `下載 ${L.length} 個（${qLabel(sel.q)}）` : `下載 ${qLabel(sel.q)}`;
+  $('#bGo').textContent = L.length > 1 ? `下載 ${L.length} 個（${qLabel(sel.q)}）` : `下載 ${qShow(sel.q, info && info.ok && info.heights ? resFor(sel.q, info.heights[0]) : 0)}`;
 }
 
 $('#bGo').onclick = () => {
@@ -330,7 +344,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -339,7 +353,9 @@ function enqueue(url, q, inf, x) {
     playlist: !!(inf && inf.isList && sel.playlist), subs: !!(sel.subs && !['audio', 'mp3', 'thumb'].includes(q)), embed: !!(sel.embed && q !== 'thumb'),
     sponsor: !!(x.sponsor && st.k === 'YouTube' && q !== 'thumb'), chapters: !!(x.chapters && q !== 'thumb'), section: x.section || '',
     k: inf && inf.ok ? (inf.k || 0) : 0, state: 'wait', pct: 0, t: Date.now() };
+  if (inf && inf.ok && inf.heights && inf.heights.length) j.res = resFor(q, inf.heights[0]);
   Q.unshift(j); drawCard(j); pump(); saveQ();
+  if (!(inf && inf.ok) && newShell() && q !== 'thumb') N.probe('qi:' + j.id, url, probeSpec(url, 0));
 }
 const running = () => Q.filter(j => j.state === 'run').length;
 let netWait = false;
@@ -426,7 +442,7 @@ function cardHTML(j) {
   if (j.state === 'run' || j.state === 'wait') acts = `<button class="btn ghost" data-a="cancel" type="button">取消</button>`;
   else if (j.state === 'ok') acts = `<button class="btn" data-a="open" type="button">開啟</button><button class="btn ghost" data-a="share" type="button">分享</button><button class="btn ghost" data-a="x" type="button">移除</button>`;
   else acts = `<button class="btn" data-a="retry" type="button">重試</button>${j.state === 'bad' ? '<button class="btn ghost" data-a="detail" type="button">詳細</button>' : ''}<button class="btn ghost" data-a="x" type="button">移除</button>`;
-  const tags = [qLabel(j.q), j.playlist ? '清單' : '', j.section ? '片段' : '', j.chapters ? '章節' : '', j.sponsor ? '跳贊助' : ''].filter(Boolean);
+  const tags = [qShow(j.q, j.res), j.playlist ? '清單' : '', j.section ? '片段' : '', j.chapters ? '章節' : '', j.sponsor ? '跳贊助' : ''].filter(Boolean);
   return `${thumbImg(j.thumb)}<div class="cb">
     <div class="ct">${esc(j.title || j.url)}</div>
     <div class="cm"><span class="badge">${esc(j.ab)}</span><span class="state ${stateCls}">${stateTxt}</span>${tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>
@@ -484,7 +500,7 @@ function restore() {
 let hFilter = '全部', hAsk = -1;
 function saveHist(j) {
   const H = LS('hist') || [];
-  H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, ok: j.state === 'ok', msg: j.msg, files: (j.files || []).slice(0, 20) });
+  H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: j.res || 0, ok: j.state === 'ok', msg: j.msg, files: (j.files || []).slice(0, 20) });
   LS('hist', H.slice(0, 400));
 }
 function drawHist() {
@@ -500,7 +516,7 @@ function drawHist() {
     const f = h.files && h.files[0], total = (h.files || []).reduce((a, x) => a + (+x.size || 0), 0);
     return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}" data-i="${h.i}">${thumbImg(h.thumb)}<div class="cb">
       <div class="ct">${esc(h.title || h.u)}</div>
-      <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span><span>${fmtTime(h.t)}</span><span>${esc(qLabel(h.q || 'best'))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}</div>
+      <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span><span>${fmtTime(h.t)}</span><span>${esc(qShow(h.q || 'best', h.res))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}</div>
       ${h.gone ? '<div class="st mut">檔案已刪除</div>' : h.ok ? '' : `<div class="st">${esc(h.msg || '失敗')}</div>`}
       ${hAsk === h.i ? `<div class="ask"><span>刪掉手機裡的檔案？刪了就找不回來。</span><button class="btn sm danger" data-a="delYes" type="button">刪掉</button><button class="btn sm ghost" data-a="delNo" type="button">取消</button></div>` : ''}
       <div class="acts">${h.ok && f && !h.gone ? '<button class="btn" data-a="open" type="button">開啟</button><button class="btn ghost" data-a="share" type="button">分享</button>' : ''}<button class="btn ghost" data-a="again" type="button">再下載</button><button class="btn ghost" data-a="copy" type="button">複製連結</button>${h.ok && f && !h.gone && has('deleteFile') ? '<button class="btn ghost" data-a="delFile" type="button">刪檔案</button>' : ''}<button class="btn ghost" data-a="del" type="button">刪紀錄</button></div>
