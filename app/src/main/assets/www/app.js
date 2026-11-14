@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.15';
+const UI_VER = 'YTD_UI_V0.1.16';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.16', ['有新版本會主動提醒：開 App、回到 App、每 30 分鐘各檢查一次，下載頁上方會出現「有新版本」', '下載速度和剩餘時間改成平均值（看最近 12 秒），每秒更新一次，不再亂跳', '下載完成會顯示總共花了多久']],
   ['YTD_UI_V0.1.14', ['打字就能搜尋 YouTube、Bilibili、SoundCloud，點結果直接解析', '在 App 裡登入網站（Bilibili、IG、FB、X、TikTok…），下載需要登入的內容', '從電腦匯入 cookies.txt（YouTube 登入用）', '選存檔資料夾（可以存到 SD 卡）', '只下載一段、依章節切成多個檔、只抓封面圖、跳過贊助片段', '只用 Wi-Fi、加速下載、限速、代理、自訂參數', '分享進來直接下載、完成震動、長按圖示「貼上下載」', 'App 關掉也繼續下載，重開會接回', 'App 內就能更新外殼 APK；設定和紀錄可以匯出、還原', '紀錄可以刪掉檔案本身']],
   ['YTD_V0.1.06（外殼）', ['下載引擎跟畫面分開，App 關掉也繼續', '登入／瀏覽頁、自選資料夾、APK 自我更新、aria2 加速、萬用指令接口、捷徑、刪檔、網路與權限狀態', '之後大部分新功能都能用畫面更新包加，不用再開電腦']],
   ['YTD_UI_V0.1.13', ['YouTube 解題程式自動從 GitHub 補齊；解析拿不到格式也先顯示標題縮圖']],
@@ -51,7 +52,7 @@ const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 
 // ---------- 設定
 const DEF = { quality: 'best', conc: 2, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
-  auto: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
+  auto: true, autoUpd: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
   wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
 let S = Object.assign({}, DEF, LS('set') || {});
 const saveS = () => LS('set', S);
@@ -72,6 +73,27 @@ const thumbImg = (src, cls) => src ? `<img class="${cls || 'thumb'}" src="${esc(
 function copyText(t) { if (has('copy')) { N.copy(t); toast('已複製'); return; } try { navigator.clipboard.writeText(t).then(() => toast('已複製'), () => toast('複製失敗')); } catch (e) { toast('複製失敗'); } }
 function parseTime(t) { t = String(t || '').trim(); if (!t) return null; if (/^\d+(\.\d+)?$/.test(t)) return +t; const p = t.split(':').map(Number); if (p.some(isNaN)) return NaN; return p.reduce((a, b) => a * 60 + b, 0); }
 function splitArgs(s) { const out = []; const re = /"([^"]*)"|'([^']*)'|(\S+)/g; let m; while ((m = re.exec(s || ''))) out.push(m[1] ?? m[2] ?? m[3]); const r = []; for (let i = 0; i < out.length; i++) { if (out[i].startsWith('-') && out[i + 1] !== undefined && !out[i + 1].startsWith('-')) { r.push([out[i], out[i + 1]]); i++; } else r.push([out[i]]); } return r; }
+const toBytes = t => { const m = String(t || '').match(/([\d.]+)\s*([KMGT]?)i?B/i); return m ? +m[1] * Math.pow(1024, ' KMGT'.indexOf(m[2].toUpperCase())) : 0; };
+// 速度和剩餘時間：用「最近 12 秒實際下載了多少」來算，再做平均，每秒只更新一次顯示
+function smooth(j, pct, inst, eta) {
+  const now = Date.now();
+  if (!j.sm || pct + 0.5 < j.sm.lastPct) j.sm = { pts: [], lastPct: 0, spd: 0, shown: 0 };   // 換下一個檔（影像→聲音）就重算
+  const s = j.sm; s.lastPct = pct;
+  let cur = 0;
+  if (j.total > 0 && pct > 0) {
+    s.pts.push([now, pct / 100 * j.total]);
+    while (s.pts.length > 2 && now - s.pts[0][0] > 12000) s.pts.shift();
+    const dt = (now - s.pts[0][0]) / 1000;
+    if (dt >= 2) cur = (s.pts[s.pts.length - 1][1] - s.pts[0][1]) / dt;
+  }
+  if (cur > 0) s.spd = s.spd ? s.spd * 0.7 + cur * 0.3 : cur;
+  else if (inst > 0 && !(j.total > 0 && s.pts.length > 1)) s.spd = s.spd ? s.spd * 0.85 + inst * 0.15 : inst;
+  if (now - s.shown < 1000) return;
+  s.shown = now;
+  j.speed = s.spd > 0 ? fmtSize(s.spd) + '/s' : '';
+  const left = j.total > 0 && pct > 0 ? j.total * (1 - pct / 100) : 0;
+  j.eta = left > 0 && s.spd > 0 ? Math.round(left / s.spd) : (eta > 0 && !j.total ? eta : j.eta || 0);
+}
 let reqSeq = 0; const pend = {};
 function req(kind, fn) { const id = kind + (++reqSeq); pend[id] = fn; return id; }
 function settle(id, v) { const f = pend[id]; if (f) { delete pend[id]; f(v); } }
@@ -289,7 +311,7 @@ function checkClip() {
   if (u === LS('lastClip') || currentUrls().includes(u) || Q.some(j => j.url === u)) return;
   clipU = u; $('#clipUrl').textContent = u; $('#clipBar').hidden = false;
 }
-window.onResume = () => { setTimeout(checkClip, 450); refreshEnv(); pump(); };
+window.onResume = () => { setTimeout(checkClip, 450); refreshEnv(); pump(); autoCheck(false); };
 $('#clipAdd').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
 $('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; };
 window.onShare = t => {
@@ -308,7 +330,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -350,7 +372,7 @@ function globalArgs() {
   return a;
 }
 function startJob(j) {
-  j.state = 'run'; j.pct = 0; j.stage = '準備中…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = '';
+  j.state = 'run'; j.pct = 0; j.stage = '準備中…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = ''; j.sm = null; j.total = 0; j.t0 = Date.now();
   const st = siteOf(j.url);
   const spec = { id: j.pid, url: j.url, mode: j.q === 'thumb' ? 'none' : j.q, args: argsFor(j), sub: S.subdir ? j.site : '', playlist: j.playlist,
     tpl: (j.playlist ? '%(playlist_index|)s ' : '') + (TPL_STR[S.tpl] || TPL_STR.title), title: j.title, notify: S.notify,
@@ -367,12 +389,11 @@ window.onProg = s => {
   const p = JSON.parse(s), j = byPid(p.id); if (!j || j.state !== 'run') return;
   const line = String(p.line || '');
   if (p.pct > 0) j.pct = p.pct;
-  if (p.eta > 0) j.eta = p.eta;
-  let m;
-  if ((m = line.match(/of\s+~?\s*([\d.]+\s*[KMG]i?B)/))) j.size = m[1].replace('i', '');
-  if ((m = line.match(/at\s+([\d.]+\s*[KMG]i?B\/s)/))) j.speed = m[1].replace('i', '');
+  let m, inst = 0;
+  if ((m = line.match(/of\s+~?\s*([\d.]+\s*[KMG]i?B)/)) || (m = line.match(/\/([\d.]+\s*[KMG]i?B)\(/))) { j.size = m[1].replace('i', ''); j.total = toBytes(m[1]); }
+  if ((m = line.match(/at\s+([\d.]+\s*[KMG]?i?B)\/s/)) || (m = line.match(/DL:([\d.]+\s*[KMG]?i?B)/))) inst = toBytes(m[1]);
   if ((m = line.match(/Downloading item (\d+) of (\d+)/))) j.item = m[1] + '/' + m[2];
-  if ((m = line.match(/DL:([\d.]+[KMG]i?B)/))) j.speed = m[1].replace('i', '') + '/s';
+  if (p.pct > 0 || inst > 0) smooth(j, p.pct > 0 ? p.pct : 0, inst, p.eta);
   j.stage = /\[Merger\]|Merging/.test(line) ? '合併影像和聲音…' : /ExtractAudio/.test(line) ? '轉成 MP3…' : /SponsorBlock|ModifyChapters/.test(line) ? '剪掉贊助片段…' : /SplitChapters/.test(line) ? '依章節切檔…' : /EmbedThumbnail|EmbedSubtitle|Metadata/.test(line) ? '寫入封面和資訊…' : /\[download\]|DL:/.test(line) ? '' : (p.pct > 0 ? '' : '連線中…');
   if (!j.title) { const t = line.match(/Destination: (?:.*\/)?(.+?)\.[a-z0-9]+$/i); if (t) j.title = t[1].replace(/\s\[[\w-]{6,}\]$/, ''); }
   drawCard(j);
@@ -386,6 +407,7 @@ window.onDone = s => {
   j.state = p.ok ? 'ok' : (p.msg === '已取消' ? 'cancel' : 'bad');
   j.files = p.files || []; j.msg = p.ok ? '' : (p.msg === '已取消' ? '已取消' : friendly(p.msg, j.site)); j.raw = p.msg || '';
   if (!j.title && j.files[0]) j.title = j.files[0].name.replace(/\.[^.]+$/, '');
+  if (p.ok && j.t0) j.took = Math.round((Date.now() - j.t0) / 1000);
   if (j.state !== 'cancel') saveHist(j);
   if (p.ok && S.vibe) call('vibrate', 60);
   drawCard(j); saveQ(); pump();
@@ -394,7 +416,7 @@ window.onDone = s => {
 function stText(j) {
   if (j.state === 'run') return j.stage || [j.pct ? j.pct.toFixed(1) + '%' : '', j.size, j.speed, j.eta ? '剩 ' + fmtEta(j.eta) : '', j.item ? '第 ' + j.item + ' 部' : ''].filter(Boolean).join(' · ');
   if (j.state === 'wait') return netWait ? '等 Wi-Fi（設定裡開了只用 Wi-Fi）' : '等前面的下載完';
-  if (j.state === 'ok') return '已存到 ' + (j.files[0] ? j.files[0].path : '') + (j.files.length > 1 ? `（共 ${j.files.length} 個檔）` : '');
+  if (j.state === 'ok') return '已存到 ' + (j.files[0] ? j.files[0].path : '') + (j.files.length > 1 ? `（共 ${j.files.length} 個檔）` : '') + (j.took ? ' · 花了 ' + fmtEta(j.took) : '');
   return j.msg;
 }
 function cardHTML(j) {
@@ -570,7 +592,8 @@ function drawSet() {
   $('#envNotify').textContent = env.notify === false ? '目前沒有允許' : env.notify ? '已允許' : '';
   $('#envBattery').textContent = env.batteryFree ? '已設定，不會被省電暫停' : '長時間下載不會被系統暫停（建議設定）';
   $('#ytTries').innerHTML = YT_TRIES.map((t, i) => { const c = t.find(a => a[0] === '--extractor-args'); return `${i + 1}. ${c ? esc(c[1].replace('youtube:player_client=', '')) : '預設'}`; }).join('<br>');
-  $('#updUrl').value = LS('updurl') || '';
+  $('#updUrl').value = updUrl();
+  bindSw('#sAutoUpd', 'autoUpd', () => { if (S.autoUpd) autoCheck(true); else $('#updBar').hidden = true; });
   drawVer();
 }
 $('#sSubLang').onchange = () => { S.subLang = $('#sSubLang').value.trim() || DEF.subLang; saveS(); };
@@ -600,6 +623,37 @@ window.onCore = m => { $('#coreMsg').textContent = m; $('#bCore').disabled = fal
 // ---- App 更新：update.json = {ver, zip, shell, apk}
 const verNum = v => +(String(v || '').replace(/\D/g, '') || 0);
 let apkHref = '';
+const UPD_DEFAULT = 'https://github.com/tpc20001/YTDown/releases/latest/download/update.json';
+const updUrl = () => LS('updurl') || UPD_DEFAULT;
+let updInfo = null, autoReload = false;
+// 主動檢查：開 App、回到 App、每 30 分鐘。只抓一個很小的 update.json，不耗電也不耗流量
+function autoCheck(force) {
+  if (!S.autoUpd || !has('httpGet')) return;
+  if (!force && Date.now() - (LS('updAt') || 0) < 30 * 60e3) { showUpd(); return; }
+  LS('updAt', Date.now());
+  const u = updUrl();
+  N.httpGet(req('h', r => {
+    let j; try { j = JSON.parse(r.body); } catch (e) { return; }
+    updInfo = { u, ui: j.ver || '', shell: j.shell || '', apk: j.apk ? new URL(j.apk, u).href : '' };
+    LS('updInfo', updInfo); showUpd();
+  }), u);
+}
+function showUpd() {
+  const i = updInfo || LS('updInfo'), bar = $('#updBar'); if (!i) { bar.hidden = true; return; }
+  const ui = i.ui && verNum(i.ui) > verNum(call('uiVer')) ? i.ui : '', sh = i.shell && i.apk && verNum(i.shell) > verNum(call('shellVer')) ? i.shell : '';
+  const key = ui + '|' + sh;
+  if ((!ui && !sh) || LS('updSkip') === key) { bar.hidden = true; return; }
+  updInfo = i;
+  $('#updTxt').textContent = [sh ? '外殼 ' + sh.replace('YTD_', '') : '', ui ? '畫面 ' + ui.replace('YTD_UI_', '') : ''].filter(Boolean).join('、');
+  $('#updGo').textContent = sh ? '安裝' : '更新';
+  bar.dataset.key = key; bar.dataset.kind = sh ? 'apk' : 'ui'; bar.hidden = false;
+}
+$('#updGo').onclick = () => {
+  if ($('#updBar').dataset.kind === 'apk') { toast('下載新外殼中，等一下會跳出安裝畫面', 5000); N.installApk(updInfo.apk); }
+  else { autoReload = true; toast('更新中…'); call('checkUpdate', updInfo.u); }
+};
+$('#updLater').onclick = () => { LS('updSkip', $('#updBar').dataset.key); $('#updBar').hidden = true; };
+setInterval(() => autoCheck(false), 5 * 60e3);
 $('#bChk').onclick = () => {
   const u = $('#updUrl').value.trim(); if (!u) { $('#updMsg').textContent = '先填 update.json 的網址'; return; }
   LS('updurl', u); $('#updMsg').textContent = '檢查中…'; $('#bApk').hidden = true; $('#bReload').hidden = true;
@@ -614,10 +668,11 @@ $('#bChk').onclick = () => {
   N.httpGet(id, u);
 };
 window.onHttp = s => { const r = JSON.parse(s); settle(r.id, r); };
-window.onUpd = s => { const p = JSON.parse(s); $('#updMsg').textContent = p.msg; $('#bReload').hidden = !p.ok; };
+window.onUpd = s => { const p = JSON.parse(s); $('#updMsg').textContent = p.msg; $('#bReload').hidden = !p.ok;
+  if (autoReload) { autoReload = false; if (p.ok && has('reload')) N.reload(); else toast(p.msg, 4000); } };
 $('#bApk').onclick = () => { if (apkHref) N.installApk(apkHref); };
 $('#bApkUrl').onclick = () => { const el = $('#apkUrl'); if (el.hidden) { el.hidden = false; el.focus(); return; } const u = el.value.trim(); if (!/^https?:\/\//.test(u)) { toast('先貼上 APK 的網址'); return; } if (!has('installApk')) { toast('這版外殼不支援，請用電腦重做 APK'); return; } N.installApk(u); };
-window.onApk = s => { const r = JSON.parse(s); $('#updMsg').textContent = r.msg; if (!r.ok) toast(r.msg, 4000); };
+window.onApk = s => { const r = JSON.parse(s); $('#updMsg').textContent = r.msg; toast(r.msg, 4000); };
 $('#bPick').onclick = () => { $('#updMsg').textContent = '選檔中…'; call('pickUpdate'); };
 $('#bReload').onclick = () => { if (has('reload')) N.reload(); else location.reload(); };
 $('#bResetUi').onclick = () => { if (has('resetUi')) N.resetUi(); else toast('這版外殼不支援'); };
@@ -659,6 +714,7 @@ restore(); infoLine(); pump();
 { const p = LS('page'); if (p && PAGES.includes(p) && p !== 'dl') page(p); }
 setTimeout(() => { if (S.autoCore && has('updateCore') && Date.now() - (LS('coreAt') || 0) > 20 * 3600e3) { $('#coreMsg').textContent = '自動更新中…'; if (has('updateCoreCh')) N.updateCoreCh(S.channel); else N.updateCore(); } }, 1500);
 setTimeout(checkClip, 600);
+setTimeout(() => autoCheck(true), 3000);
 
 // 瀏覽器預覽時放示範資料，方便看排版
 if (!N) {
