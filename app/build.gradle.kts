@@ -9,9 +9,9 @@ android {
         applicationId = "com.golden.ytdown"
         minSdk = 26
         targetSdk = 34
-        versionCode = 106
-        versionName = "YTD_V0.1.06"
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+        versionCode = 107
+        versionName = "YTD_V0.1.07"
+        ndk { abiFilters += listOf("arm64-v8a") }   // 只留現在手機用的 64 位元，APK 從 160MB 縮到約三分之一
     }
     // 固定簽章：keystore/ytd.jks（BUILD_APK.bat 第一次會自動產生）。同一把鑰匙打包，手機才能直接覆蓋安裝
     val ytdKs = rootProject.file("keystore/ytd.jks")

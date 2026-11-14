@@ -6,6 +6,7 @@ import android.app.DownloadManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.ConnectivityManager
@@ -21,6 +22,7 @@ import android.os.Vibrator
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.Settings
+import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -29,6 +31,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.documentfile.provider.DocumentFile
 import com.yausername.youtubedl_android.YoutubeDL
@@ -46,7 +49,7 @@ import java.util.zip.ZipInputStream
  */
 class MainActivity : AppCompatActivity() {
     companion object {
-        const val SHELL = "YTD_V0.1.06"
+        const val SHELL = "YTD_V0.1.07"
         const val ACTION_PASTE = "com.golden.ytdown.PASTE"
         const val ACTION_BROWSE = "com.golden.ytdown.BROWSE"
     }
@@ -91,7 +94,8 @@ class MainActivity : AppCompatActivity() {
         web = WebView(this); setContentView(web)
         web.setBackgroundColor(Color.parseColor("#0b0c0e"))
         web.settings.javaScriptEnabled = true; web.settings.domStorageEnabled = true
-        web.settings.allowFileAccess = true
+        web.settings.allowFileAccess = true; web.settings.allowContentAccess = true   // 內建播放器要讀下載好的檔
+        web.settings.mediaPlaybackRequiresUserGesture = false
         web.addJavascriptInterface(Bridge(), "YTD")
         web.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView?, u: String?) { pending?.let { js(it.first, it.second); pending = null } }
@@ -204,6 +208,7 @@ class MainActivity : AppCompatActivity() {
         // ---- 下載引擎（交給 Engine，畫面關掉也會繼續）
         @JavascriptInterface fun job(spec: String) = Engine.job(spec)
         @JavascriptInterface fun cancel(id: String) = Engine.cancel(id)
+        @JavascriptInterface fun fetchJob(spec: String) = Engine.fetchJob(spec)
         @JavascriptInterface fun probe(id: String, url: String, spec: String) = Engine.probe(id, url, spec)
         @JavascriptInterface fun exec(id: String, url: String, spec: String) = Engine.exec(id, url, spec)
         @JavascriptInterface fun updateCore() = Engine.updateCore("stable")
@@ -221,6 +226,15 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 startActivity(Intent(this@MainActivity, BrowserActivity::class.java)
                     .putExtra("url", url).putExtra("mode", mode).putExtra("key", key).putExtra("domains", domains))
+            }
+        }
+        /** 新版瀏覽頁：spec={url,mode,key,domains,btn:"按鈕文字",hint:"上方提示",js:"按鈕按下時在網頁裡執行的程式"} → onBrowse {mode,key,url,title,result} */
+        @JavascriptInterface fun browse2(spec: String) {
+            val o = try { JSONObject(spec) } catch (e: Exception) { return }
+            runOnUiThread {
+                startActivity(Intent(this@MainActivity, BrowserActivity::class.java)
+                    .putExtra("url", o.optString("url")).putExtra("mode", o.optString("mode", "browse")).putExtra("key", o.optString("key"))
+                    .putExtra("domains", o.optString("domains")).putExtra("btn", o.optString("btn")).putExtra("hint", o.optString("hint")).putExtra("js", o.optString("js")))
             }
         }
         @JavascriptInterface fun cookieInfo(key: String): String { val f = Engine.cookieFile(key); return jo("has" to (f.exists() && f.length() > 0), "time" to (if (f.exists()) f.lastModified() else 0L)) }
@@ -320,6 +334,59 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /** 萬用網路請求：spec={url,method,headers:{},body,cookies:"登入資料名稱"} → onHttp {id,ok,status,body} */
+        @JavascriptInterface fun http(id: String, spec: String) {
+            ui.launch(Dispatchers.IO) {
+                val r = try {
+                    val o = JSONObject(spec)
+                    val (code, body) = Net.text(o.getString("url"), o.optString("method", "GET"), o.optJSONObject("headers"), o.optString("cookies", ""), if (o.has("body")) o.optString("body") else null, 4_000_000)
+                    jo("id" to id, "ok" to (code in 200..299), "status" to code, "body" to body)
+                } catch (e: Exception) { jo("id" to id, "ok" to false, "status" to 0, "body" to (e.message ?: "")) }
+                js("onHttp", r)
+            }
+        }
+
+        /** 問一批網址各有多大：spec={urls:[...],headers:{},cookies} → 每個回一次 onHead {id,i,ok,len,type} */
+        @JavascriptInterface fun head(id: String, spec: String) {
+            ui.launch(Dispatchers.IO) {
+                val o = try { JSONObject(spec) } catch (e: Exception) { return@launch }
+                val urls = o.optJSONArray("urls") ?: return@launch
+                val sem = kotlinx.coroutines.sync.Semaphore(6)
+                (0 until urls.length()).map { i ->
+                    launch {
+                        sem.acquire()
+                        try {
+                            val r = try { Net.head(urls.getString(i), o.optJSONObject("headers"), o.optString("cookies", "")) } catch (e: Exception) { JSONObject().put("ok", false).put("len", -1) }
+                            js("onHead", r.put("id", id).put("i", i).toString())
+                        } finally { sem.release() }
+                    }
+                }
+            }
+        }
+
+        // ---- 內建播放器用：轉向、螢幕不關、全螢幕
+        @JavascriptInterface fun orient(mode: String) {
+            runOnUiThread {
+                requestedOrientation = when (mode) {
+                    "land" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    "port" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                    else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                }
+            }
+        }
+        @JavascriptInterface fun keepOn(on: Boolean) {
+            runOnUiThread { if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        }
+        @JavascriptInterface fun immersive(on: Boolean) {
+            runOnUiThread {
+                try {
+                    val ctl = WindowInsetsControllerCompat(window, window.decorView)
+                    if (on) { ctl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; ctl.hide(WindowInsetsCompat.Type.systemBars()) }
+                    else ctl.show(WindowInsetsCompat.Type.systemBars())
+                } catch (_: Exception) {}
+            }
+        }
+
         // ---- 更新
         @JavascriptInterface fun pickUpdate() { runOnUiThread { pickZip.launch("application/zip") } }
         @JavascriptInterface fun checkUpdate(jsonUrl: String) {
@@ -340,10 +407,18 @@ class MainActivity : AppCompatActivity() {
             }
             ui.launch(Dispatchers.IO) {
                 try {
-                    js("onApk", jo("ok" to true, "msg" to "下載 APK 中…", "stage" to "dl"))
-                    val (code, b) = httpBytes(url, 300_000_000)
-                    if (code !in 200..299 || b.size < 100_000) throw Exception("下載失敗（$code）")
-                    val f = File(cacheDir, "update/ytd_update.apk"); f.parentFile?.mkdirs(); f.writeBytes(b)
+                    val f = File(cacheDir, "update/ytd_update.apk"); f.parentFile?.mkdirs(); f.delete()
+                    var last = 0L
+                    js("onApk", jo("ok" to true, "msg" to "下載新外殼中…", "stage" to "dl", "pct" to 0))
+                    Net.download(url, null, "", f, { true }) { done, total ->
+                        val now = System.currentTimeMillis()
+                        if (now - last > 500) {
+                            last = now
+                            val pct = if (total > 0) (done * 100 / total).toInt() else -1
+                            js("onApk", jo("ok" to true, "stage" to "dl", "pct" to pct, "msg" to ("下載新外殼中 " + (if (pct >= 0) "$pct%" else "${done / 1048576} MB"))))
+                        }
+                    }
+                    if (f.length() < 100_000) throw Exception("下載到的檔案不對")
                     val u = FileProvider.getUriForFile(this@MainActivity, "$packageName.files", f)
                     withContext(Dispatchers.Main) {
                         startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(u, "application/vnd.android.package-archive")

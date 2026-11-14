@@ -27,6 +27,7 @@ class BrowserActivity : AppCompatActivity() {
     private lateinit var web: WebView
     private lateinit var titleView: TextView
     private var mode = "browse"; private var key = ""; private var domains = listOf<String>()
+    private var pageJs = ""     // 畫面那邊給的小程式：按右上角按鈕時在網頁裡執行，結果送回去（例如抓這頁的圖片、影片）
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun btn(t: String, primary: Boolean, onClick: () -> Unit) = Button(this).apply {
@@ -42,6 +43,9 @@ class BrowserActivity : AppCompatActivity() {
         super.onCreate(b)
         mode = intent.getStringExtra("mode") ?: "browse"
         key = intent.getStringExtra("key") ?: ""
+        pageJs = intent.getStringExtra("js") ?: ""
+        val btnLabel = intent.getStringExtra("btn") ?: ""
+        val hint = intent.getStringExtra("hint") ?: ""
         domains = (intent.getStringExtra("domains") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
         val url = intent.getStringExtra("url") ?: "https://www.youtube.com"
         @Suppress("DEPRECATION") run { window.statusBarColor = Color.parseColor("#0b0c0e"); window.navigationBarColor = Color.parseColor("#0b0c0e") }
@@ -53,12 +57,12 @@ class BrowserActivity : AppCompatActivity() {
         }
         bar.addView(btn("✕", false) { finish() })
         titleView = TextView(this).apply {
-            text = if (mode == "login") "登入後按「完成登入」" else "找到影片後按「下載這頁」"
+            text = hint.ifEmpty { if (mode == "login") "登入後按「完成登入」" else "找到影片後按「下載這頁」" }
             setTextColor(Color.parseColor("#8b919b")); textSize = 13f; maxLines = 1
             setPadding(dp(10), 0, dp(10), 0)
         }
         bar.addView(titleView, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(btn(if (mode == "login") "完成登入" else "下載這頁", true) { done() })
+        bar.addView(btn(btnLabel.ifEmpty { if (mode == "login") "完成登入" else "下載這頁" }, true) { done() })
         root.addView(bar)
         val prog = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
         root.addView(prog, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)))
@@ -73,7 +77,7 @@ class BrowserActivity : AppCompatActivity() {
                 val s = r?.url?.scheme ?: return false
                 return !(s == "http" || s == "https")   // intent:// 這類不開，留在網頁裡
             }
-            override fun onPageFinished(v: WebView?, u: String?) { if (mode == "browse") titleView.text = v?.title ?: u ?: "" }
+            override fun onPageFinished(v: WebView?, u: String?) { if (mode != "login") titleView.text = v?.title ?: u ?: "" }
         }
         web.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(v: WebView?, p: Int) { prog.progress = p; prog.visibility = if (p >= 100) android.view.View.INVISIBLE else android.view.View.VISIBLE }
@@ -84,7 +88,14 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun done() {
-        val res = JSONObject().put("mode", mode).put("key", key).put("url", web.url ?: "")
+        val res = JSONObject().put("mode", mode).put("key", key).put("url", web.url ?: "").put("title", web.title ?: "")
+        if (pageJs.isNotEmpty()) {
+            web.evaluateJavascript(pageJs) { r ->
+                res.put("result", r ?: "")
+                Engine.emit("onBrowse", res.toString()); finish()
+            }
+            return
+        }
         if (mode == "login") {
             CookieManager.getInstance().flush()
             val n = writeCookies()

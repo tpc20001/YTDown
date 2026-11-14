@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.18';
+const UI_VER = 'YTD_UI_V0.1.19';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,8 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.19', ['Instagram：照片、影片、多張貼文、限時動態都能下載（要先在「平台」登入 IG）', 'IG 帳號瀏覽：搜尋帳號或貼上個人頁網址，一次載入 100 則、預設全勾、可以一次全部下載', '內建播放器：紀錄裡直接播放影片、看照片；左右滑快轉（滑越快跳越多、越慢越精準）、點兩下左右跳 10 秒、往下滑關閉、記住上次看到哪', '紀錄：可依日期、檔案大小、標題、作者排序；可搜尋作者（打一部分就找得到）；點作者看他的全部', '平台登入多了「貼代碼」：每個平台都能貼 Cookie 登入']],
+  ['YTD_V0.1.07（外殼）', ['新增可帶登入資料的網路請求、直接下載檔案（IG 照片用）', '播放器用的橫向、螢幕不關、全螢幕', 'APK 只留 64 位元，從 160 MB 縮到約三分之一；App 內更新外殼改成邊下載邊存，並顯示進度']],
   ['YTD_UI_V0.1.18', ['剪貼簿提示的「加入」按鈕變大、改成醒目的藍色', '縮圖完整顯示不裁切：橫式影片整張看得到，直式影片左右留黑邊']],
   ['YTD_UI_V0.1.17', ['選「最好」時會標出實際畫質（例如：最好 1080p），下載卡片和紀錄都會記下來', '沒先解析就下載的（一次貼很多個、分享直接下載），也會自動補上標題、縮圖和畫質']],
   ['YTD_UI_V0.1.16', ['有新版本會主動提醒：開 App、回到 App、每 30 分鐘各檢查一次，下載頁上方會出現「有新版本」', '下載速度和剩餘時間改成平均值（看最近 12 秒），每秒更新一次，不再亂跳', '下載完成會顯示總共花了多久']],
@@ -36,6 +38,7 @@ const SITES = [
   { k: 'Facebook', ab: 'FB', re: /(^|\.)(facebook\.com|fb\.watch)$/, home: 'https://m.facebook.com', lv: 'y', note: '公開影片、Reels 可以；社團、私人的要登入。', ck: 'facebook', login: 'https://m.facebook.com/login', dom: 'facebook.com,www.facebook.com,m.facebook.com' },
   { k: '小紅書', ab: '小紅書', re: /(^|\.)(xiaohongshu\.com|xhslink\.com)$/, home: 'https://www.xiaohongshu.com', lv: 'y', note: '影片筆記可以，時好時壞。', ck: 'xiaohongshu', login: 'https://www.xiaohongshu.com', dom: 'xiaohongshu.com,www.xiaohongshu.com' },
   { k: '微博', ab: '微博', re: /(^|\.)(weibo\.com|weibo\.cn)$/, home: 'https://m.weibo.cn', lv: 'y', note: '部分影片要登入。', ck: 'weibo', login: 'https://passport.weibo.com/sso/signin', dom: 'weibo.com,www.weibo.com,m.weibo.cn,weibo.cn,passport.weibo.com' },
+  { k: 'Telegram', ab: 'TG', re: /(^|\.)(t\.me|telegram\.me)$/, home: 'https://t.me', lv: 'y', note: '公開頻道的貼文連結可以（t.me/頻道名/編號）；私人群組和聊天室不行。' },
   { k: 'Vimeo', ab: 'VM', re: /(^|\.)vimeo\.com$/, home: 'https://vimeo.com', lv: 'g', note: '公開影片可以。' },
   { k: 'Twitch', ab: 'TW', re: /(^|\.)twitch\.tv$/, home: 'https://m.twitch.tv', lv: 'g', note: '精華片段、VOD 可以；直播會錄到你取消為止。' },
   { k: 'Reddit', ab: 'RD', re: /(^|\.)(reddit\.com|redd\.it)$/, home: 'https://www.reddit.com', lv: 'g', note: '貼文裡的影片可以。' },
@@ -100,6 +103,45 @@ function smooth(j, pct, inst, eta) {
   j.eta = left > 0 && s.spd > 0 ? Math.round(left / s.spd) : (eta > 0 && !j.total ? eta : j.eta || 0);
 }
 let reqSeq = 0; const pend = {};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function httpReq(spec) { return new Promise(res => N.http(req('h', res), JSON.stringify(spec))); }
+
+// =====================================================================
+// Instagram：用你登入的身分直接問 IG（照片 yt-dlp 抓不到，所以自己來）
+// =====================================================================
+const IG_HDR = { 'X-IG-App-ID': '936619743392459', 'X-Requested-With': 'XMLHttpRequest', 'Referer': 'https://www.instagram.com/', 'Accept': '*/*' };
+const IG_RES = new Set(['p', 'reel', 'reels', 'tv', 'stories', 'explore', 'accounts', 'direct', 'about', 'developer', 'legal', 'api', 'share', 'web', 'challenge']);
+function igCode(u) { u = String(u || ''); const m = u.match(/instagram\.com\/(?:[^/?#]+\/)?(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/); if (m) return { code: m[2] }; const st = u.match(/instagram\.com\/stories\/[^/]+\/(\d+)/); return st ? { pk: st[1], code: st[1] } : null; }
+function igUserOf(u) { const m = String(u || '').match(/instagram\.com\/([A-Za-z0-9._]+)\/?(?:[?#].*)?$/); return m && !IG_RES.has(m[1].toLowerCase()) ? m[1] : ''; }
+function igPk(code) { const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'; let n = 0n; for (const c of code.slice(0, code.length > 12 ? 11 : code.length)) n = n * 64n + BigInt(A.indexOf(c)); return n.toString(); }
+async function igGet(path) {
+  if (!has('http')) throw new Error('IG_SHELL');
+  const c = jcall('cookieInfo', 'instagram'); if (!c || !c.has) throw new Error('IG_LOGIN');
+  const r = await httpReq({ url: 'https://www.instagram.com/api/v1/' + path, cookies: 'instagram', headers: IG_HDR });
+  let j; try { j = JSON.parse(r.body); } catch (e) { throw new Error(r.status === 429 ? 'IG_RATE' : (r.status === 401 || r.status === 403 || /login|<html/i.test(r.body || '')) ? 'IG_LOGIN' : 'IG_HTTP ' + r.status); }
+  if (j.status === 'fail' || j.require_login) throw new Error((r.status === 429 || /wait|few minutes/i.test(j.message || '')) ? 'IG_RATE' : (j.require_login || /login|checkpoint/i.test(j.message || '')) ? 'IG_LOGIN' : 'IG_NONE ' + (j.message || ''));
+  return j;
+}
+function igParse(it) {
+  const user = (it.user && it.user.username) || '', cap = ((it.caption && it.caption.text) || '').replace(/\s+/g, ' ').trim();
+  const area = x => (x.width || 0) * (x.height || 0);
+  const best = a => (a || []).slice().sort((x, y) => area(y) - area(x))[0];
+  const small = a => (a || []).slice().sort((x, y) => (x.width || 0) - (y.width || 0)).find(x => (x.width || 0) >= 240) || best(a);
+  const list = it.carousel_media && it.carousel_media.length ? it.carousel_media : [it];
+  const code = it.code || String(it.pk || it.id || '').split('_')[0];
+  const items = list.map((m, i) => {
+    const v = best(m.video_versions), im = best(m.image_versions2 && m.image_versions2.candidates), src = v || im; if (!src || !src.url) return null;
+    const ext = v ? 'mp4' : ((src.url.split('?')[0].match(/\.(jpe?g|png|webp|heic)$/i) || [])[1] || 'jpg').toLowerCase();
+    return { url: src.url, video: !!v, name: `${user || 'ig'} ${code} ${String(i + 1).padStart(2, '0')}.${ext}` };
+  }).filter(Boolean);
+  const cover = list[0].image_versions2 && list[0].image_versions2.candidates;
+  const nv = items.filter(x => x.video).length, np = items.length - nv;
+  return { user, cap, code, items, nv, np, t: (it.taken_at || 0) * 1000, thumb: (best(cover) || {}).url || '', small: (small(cover) || {}).url || '',
+    title: cap ? cap.slice(0, 80) : `${user} 的貼文`, sum: [np ? np + ' 張照片' : '', nv ? nv + ' 部影片' : ''].filter(Boolean).join('、') };
+}
+async function igFetch(u) { const k = igCode(u); if (!k) throw new Error('IG_URL'); const j = await igGet(`media/${k.pk || igPk(k.code)}/info/`); const it = j.items && j.items[0]; if (!it) throw new Error('IG_NONE'); return igParse(it); }
+// 每個平台「貼代碼」登入要找的 Cookie 名稱（沒列的就貼整串「名稱=值; 名稱=值」）
+const CK_CODE = { instagram: 'sessionid', bilibili: 'SESSDATA', tiktok: 'sessionid', douyin: 'sessionid', x: 'auth_token', weibo: 'SUB', xiaohongshu: 'web_session', niconico: 'user_session' };
 function req(kind, fn) { const id = kind + (++reqSeq); pend[id] = fn; return id; }
 function settle(id, v) { const f = pend[id]; if (f) { delete pend[id]; f(v); } }
 const cookieOk = key => { if (!key || !S.cookies) return false; const c = jcall('cookieInfo', key); return !!(c && c.has); };
@@ -107,6 +149,12 @@ const cookieOk = key => { if (!key || !S.cookies) return false; const c = jcall(
 // 把 yt-dlp 的英文錯誤翻成白話
 function friendly(m, site) {
   m = String(m || '');
+  if (/IG_LOGIN/.test(m)) return 'IG 要先登入：到「平台」頁 → Instagram 按「登入」（或用「貼代碼」貼上 sessionid）。';
+  if (/IG_RATE/.test(m)) return 'IG 暫時擋住了（太頻繁），等幾分鐘再試。';
+  if (/IG_SHELL/.test(m)) return 'IG 的照片和帳號瀏覽要外殼 YTD_V0.1.07 以上，請先更新外殼。';
+  if (/IG_URL/.test(m)) return '看不懂這個 IG 網址。請用貼文、Reels、限時動態或個人頁的連結。';
+  if (/IG_NOUSER/.test(m)) return '找不到這個 IG 帳號，確認帳號名稱有沒有打對。';
+  if (/IG_(NONE|HTTP)/.test(m)) return 'IG 沒有回傳內容（可能是私人帳號、貼文被刪，或登入過期要重新登入）。';
   if (site === 'YouTube' && /Requested format is not available|Only images are available|n challenge|JavaScript runtime/i.test(m)) {
     const c = jcall('coreState') || {};
     return c.js ? 'YouTube 沒給影片格式。先到 設定 → 更新下載核心（可換測試版），再試一次。' : 'YouTube 要 JavaScript 引擎才下載得了，請裝外殼 YTD_V0.1.05 以上的 APK。';
@@ -149,6 +197,8 @@ function page(p) {
 }
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => page(b.dataset.p));
 window.onBack = () => {
+  if (!$('#player').hidden) { pClose(); return true; }
+  if (!$('#igPane').hidden) { igClose(); return true; }
   if (!$('#browseRow').hidden) { $('#browseRow').hidden = true; return true; }
   const on = document.querySelector('.tab.on'); if (on && on.dataset.p !== 'dl') { page('dl'); return true; } return false;
 };
@@ -199,12 +249,13 @@ function addUrls(text, quiet) {
 
 // ---- 搜尋（YouTube / Bilibili / SoundCloud）
 function drawSrc() {
-  $('#srcChips').innerHTML = SEARCHERS.map(s => `<button class="chip" type="button" data-s="${s.search}" aria-pressed="${s.search === S.src}">${esc(s.k)}</button>`).join('');
+  $('#srcChips').innerHTML = [...SEARCHERS, { search: 'iguser', k: 'IG 帳號' }].map(s => `<button class="chip" type="button" data-s="${s.search}" aria-pressed="${s.search === S.src}">${esc(s.k)}</button>`).join('');
   $('#srcChips').querySelectorAll('.chip').forEach(b => b.onclick = () => { S.src = b.dataset.s; saveS(); drawSrc(); doSearch(); });
 }
 $('#bSearch').onclick = () => doSearch();
 function doSearch() {
   const q = urlBox.value.trim(); if (q.length < 2) return;
+  if ((S.src || 'ytsearch') === 'iguser') { igSearch(q); return; }
   if (!newShell()) { $('#results').innerHTML = '<p class="empty">搜尋要外殼 YTD_V0.1.06 以上的 APK。</p>'; return; }
   $('#results').innerHTML = '<div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div>';
   const src = S.src || 'ytsearch';
@@ -221,7 +272,18 @@ function doSearch() {
   });
   call('exec', id, `${src}15:${q}`, JSON.stringify({ args: [['--flat-playlist'], ['--dump-single-json'], ['--no-warnings']] }));
 }
-$('#results').onclick = e => { const b = e.target.closest('.res'); if (!b) return; urlBox.value = b.dataset.u; onInput(); };
+$('#results').onclick = e => { const b = e.target.closest('.res'); if (!b) return; if (b.dataset.ig) { openIg(b.dataset.ig, b.dataset.uid); return; } urlBox.value = b.dataset.u; onInput(); };
+async function igSearch(q) {
+  q = q.replace(/^@/, '').trim(); const R = $('#results');
+  const direct = `<button class="res" type="button" data-ig="${esc(q)}"><span class="res-b"><span class="res-t">直接打開 @${esc(q)}</span><span class="res-m">帳號名稱要完全一樣</span></span></button>`;
+  if (!has('http')) { R.innerHTML = `<p class="empty">${esc(friendly('IG_SHELL'))}</p>`; return; }
+  R.innerHTML = '<div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div>';
+  try {
+    const j = await igGet('web/search/topsearch/?context=user&query=' + encodeURIComponent(q));
+    const U = (j.users || []).map(x => x.user).filter(u => u && u.username);
+    R.innerHTML = (U.length ? U.map(u => `<button class="res" type="button" data-ig="${esc(u.username)}" data-uid="${esc(u.pk || u.pk_id || '')}">${thumbImg(u.profile_pic_url, 'ava')}<span class="res-b"><span class="res-t">@${esc(u.username)}</span><span class="res-m">${esc([u.full_name, u.is_private ? '私人帳號' : '', u.is_verified ? '已驗證' : ''].filter(Boolean).join(' · '))}</span></span></button>`).join('') : '<p class="empty">找不到帳號</p>') + direct;
+  } catch (e) { R.innerHTML = `<p class="empty">${esc(friendly(String(e.message || e)))}</p>` + (/IG_LOGIN|IG_SHELL/.test(String(e.message)) ? '' : direct); }
+}
 window.onExec = s => { const r = JSON.parse(s); settle(r.id, r); };
 
 // ---- 逛網站
@@ -242,6 +304,13 @@ function probeSpec(u, k) { const st = siteOf(u); return JSON.stringify({ args: [
 function probe(u, k) {
   probeUrl = u; probeK = k; probeId = 'p' + Date.now();
   info = { loading: true, url: u }; drawPreview(); drawQual();
+  if (siteOf(u).k === 'Instagram' && has('http')) {
+    const me = probeId, un = igUserOf(u);
+    if (un) { info = { ok: true, url: u, profile: un, title: '@' + un + ' 的 IG', heights: [] }; drawPreview(); drawQual(); return; }
+    igFetch(u).then(d => { if (probeId !== me) return; info = { ok: true, url: u, title: d.title, uploader: d.user, thumb: d.thumb, heights: [], ig: d, k: 0 }; drawPreview(); drawQual(); })
+      .catch(e => { if (probeId !== me) return; const m = String(e.message || e); if (/IG_(LOGIN|RATE)/.test(m) || !has('probe')) { info = { err: friendly(m), url: u }; drawPreview(); drawQual(); } else N.probe(probeId, u, probeSpec(u, k)); });
+    return;
+  }
   if (!has('probe')) { info = null; drawPreview(); return; }
   if (newShell()) N.probe(probeId, u, probeSpec(u, k));
   else N.probe(probeId, u, JSON.stringify([...(triesFor(u)[k] || []), ['--ignore-no-formats-error']]));
@@ -250,7 +319,7 @@ window.onInfo = s => {
   const p = JSON.parse(s);
   if (String(p.id).startsWith('qi:')) {   // 佇列裡沒先解析的工作：補上標題、縮圖、實際畫質
     const j = Q.find(x => x.id === p.id.slice(3)); if (!j || !p.ok) return;
-    if (!j.title) j.title = p.title; if (!j.thumb) j.thumb = p.thumb;
+    if (!j.title) j.title = p.title; if (!j.thumb) j.thumb = p.thumb; if (!j.uploader) j.uploader = p.uploader || '';
     if (p.heights && p.heights.length) j.res = resFor(j.q, p.heights[0]);
     const el = document.getElementById(j.id); if (el) el.dataset.st = '';
     drawCard(j); saveQ();
@@ -271,11 +340,12 @@ function drawPreview() {
   el.hidden = false;
   if (info.loading) { el.innerHTML = `<div class="thumb"></div><div class="pv-b" style="flex:1"><div class="skel" style="width:90%"></div><div class="skel" style="width:60%"></div><div class="pv-m">解析中…</div></div>`; return; }
   if (info.err) { el.innerHTML = `<div class="pv-b"><div class="pv-err">解析失敗：${esc(info.err)}</div><div class="pv-m">還是可以直接按下載試試看。<button class="link" type="button" id="reProbe">再解析一次</button></div></div>`; $('#reProbe').onclick = () => probe(info.url, 0); return; }
+  if (info.profile) { el.innerHTML = `<div class="pv-b"><div class="pv-t">@${esc(info.profile)} 的 IG</div><div class="pv-m"><span class="badge">IG</span><span>可以看他的所有貼文，勾選後一次下載</span></div></div>`; return; }
   const st = siteOf(info.url);
   const noFmt = st.k === 'YouTube' && !info.isList && (!info.heights || !info.heights.length);
   const ch = (info.chapters || []).length;
   el.innerHTML = `${thumbImg(info.thumb)}<div class="pv-b"><div class="pv-t">${esc(info.title || '（沒有標題）')}</div>
-    <div class="pv-m"><span class="badge">${esc(st.ab)}</span>${info.uploader ? `<span>${esc(info.uploader)}</span>` : ''}${info.dur ? `<span>${fmtDur(info.dur)}</span>` : ''}${info.isList ? `<span>清單 ${info.count} 部</span>` : ''}${ch ? `<span>${ch} 個章節</span>` : ''}${info.live ? '<span class="ok-t">直播中</span>' : ''}${cookieOk(st.ck) ? '<span class="ok-t">已登入</span>' : ''}</div>
+    <div class="pv-m"><span class="badge">${esc(st.ab)}</span>${info.uploader ? `<span>${esc(info.uploader)}</span>` : ''}${info.dur ? `<span>${fmtDur(info.dur)}</span>` : ''}${info.isList ? `<span>清單 ${info.count} 部</span>` : ''}${ch ? `<span>${ch} 個章節</span>` : ''}${info.ig ? `<span>${esc(info.ig.sum)}</span><span>原始畫質</span>` : ''}${info.live ? '<span class="ok-t">直播中</span>' : ''}${cookieOk(st.ck) ? '<span class="ok-t">已登入</span>' : ''}</div>
     ${info.live ? '<div class="pv-m">直播會一直錄，按「取消」才會停。</div>' : ''}
     ${noFmt ? `<div class="pv-err">${esc(friendly('Requested format is not available', 'YouTube'))}</div>` : ''}</div>`;
 }
@@ -303,9 +373,11 @@ function drawQual() {
   $('#moreChips').innerHTML = more.map(o => `<button class="chip" type="button" data-o="${o[0]}" aria-pressed="${!!sel[o[0]]}">${sel[o[0]] ? '✓ ' : ''}${esc(o[1])}</button>`).join('');
   $('#moreChips').querySelectorAll('.chip').forEach(b => b.onclick = () => { sel[b.dataset.o] = !sel[b.dataset.o]; drawQual(); });
   $('#bGo').textContent = L.length > 1 ? `下載 ${L.length} 個（${qLabel(sel.q)}）` : `下載 ${qShow(sel.q, info && info.ok && info.heights ? resFor(sel.q, info.heights[0]) : 0)}`;
+  if (info && info.profile) $('#bGo').textContent = `看 @${info.profile} 的所有貼文`;
 }
 
 $('#bGo').onclick = () => {
+  if (info && info.profile) { openIg(info.profile); return; }
   const L = currentUrls(); if (!L.length) { toast('先貼上網址'); urlBox.focus(); return; }
   const a = parseTime($('#secFrom').value), b = parseTime($('#secTo').value);
   if (Number.isNaN(a) || Number.isNaN(b) || (a != null && b != null && b <= a)) { toast('片段時間看不懂，例如 1:20 到 2:45'); $('#more').open = true; return; }
@@ -345,7 +417,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -354,9 +426,10 @@ function enqueue(url, q, inf, x) {
     playlist: !!(inf && inf.isList && sel.playlist), subs: !!(sel.subs && !['audio', 'mp3', 'thumb'].includes(q)), embed: !!(sel.embed && q !== 'thumb'),
     sponsor: !!(x.sponsor && st.k === 'YouTube' && q !== 'thumb'), chapters: !!(x.chapters && q !== 'thumb'), section: x.section || '',
     k: inf && inf.ok ? (inf.k || 0) : 0, state: 'wait', pct: 0, t: Date.now() };
+  j.uploader = inf && inf.ok ? (inf.uploader || '') : ''; j.igData = (inf && inf.ig) || null; j.bulk = !!x.bulk;
   if (inf && inf.ok && inf.heights && inf.heights.length) j.res = resFor(q, inf.heights[0]);
   Q.unshift(j); drawCard(j); pump(); saveQ();
-  if (!(inf && inf.ok) && newShell() && q !== 'thumb') N.probe('qi:' + j.id, url, probeSpec(url, 0));
+  if (!(inf && inf.ok) && newShell() && q !== 'thumb' && st.k !== 'Instagram') N.probe('qi:' + j.id, url, probeSpec(url, 0));
 }
 const running = () => Q.filter(j => j.state === 'run').length;
 let netWait = false;
@@ -388,7 +461,26 @@ function globalArgs() {
   if (S.args) a.push(...splitArgs(S.args));
   return a;
 }
+async function igStart(j) {
+  j.state = 'run'; j.pct = 0; j.stage = '讀取 IG 貼文…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = ''; j.sm = null; j.total = 0; j.t0 = Date.now(); j.igWait = true;
+  drawCard(j); saveQ();
+  try {
+    const d = j.igData || await igFetch(j.url);
+    if (!j.igWait) return;                       // 等的時候被取消了
+    j.igWait = false; j.stage = '';
+    if (!j.title) j.title = d.title; if (!j.thumb) j.thumb = d.thumb; j.uploader = d.user || j.uploader; j.res = 0;
+    const el = document.getElementById(j.id); if (el) el.dataset.st = '';
+    drawCard(j);
+    N.fetchJob(JSON.stringify({ id: j.pid, items: d.items.map(x => ({ url: x.url, name: x.name })), sub: S.subdir ? 'Instagram' : '', dest: S.dest && S.dest.uri ? S.dest.uri : '', title: j.title, notify: S.notify && !j.bulk, headers: { Referer: 'https://www.instagram.com/' } }));
+  } catch (e) {
+    if (!j.igWait) return; j.igWait = false;
+    const m = String(e.message || e);
+    if (/IG_(NONE|HTTP)/.test(m) && !j.noApi && has('job')) { j.noApi = true; startJob(j); return; }   // 改用 yt-dlp 再試一次（只有影片行）
+    window.onDone(JSON.stringify({ id: j.pid, ok: false, msg: m }));
+  }
+}
 function startJob(j) {
+  if (j.site === 'Instagram' && has('fetchJob') && !j.noApi && !['audio', 'mp3'].includes(j.q)) { igStart(j); return; }
   j.state = 'run'; j.pct = 0; j.stage = '準備中…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = ''; j.sm = null; j.total = 0; j.t0 = Date.now();
   const st = siteOf(j.url);
   const spec = { id: j.pid, url: j.url, mode: j.q === 'thumb' ? 'none' : j.q, args: argsFor(j), sub: S.subdir ? j.site : '', playlist: j.playlist,
@@ -409,9 +501,9 @@ window.onProg = s => {
   let m, inst = 0;
   if ((m = line.match(/of\s+~?\s*([\d.]+\s*[KMG]i?B)/)) || (m = line.match(/\/([\d.]+\s*[KMG]i?B)\(/))) { j.size = m[1].replace('i', ''); j.total = toBytes(m[1]); }
   if ((m = line.match(/at\s+([\d.]+\s*[KMG]?i?B)\/s/)) || (m = line.match(/DL:([\d.]+\s*[KMG]?i?B)/))) inst = toBytes(m[1]);
-  if ((m = line.match(/Downloading item (\d+) of (\d+)/))) j.item = m[1] + '/' + m[2];
+  if ((m = line.match(/Downloading item (\d+) of (\d+)/)) || (m = line.match(/\[fetch\] (\d+)\/(\d+)/))) j.item = m[2] > 1 ? m[1] + '/' + m[2] : '';
   if (p.pct > 0 || inst > 0) smooth(j, p.pct > 0 ? p.pct : 0, inst, p.eta);
-  j.stage = /\[Merger\]|Merging/.test(line) ? '合併影像和聲音…' : /ExtractAudio/.test(line) ? '轉成 MP3…' : /SponsorBlock|ModifyChapters/.test(line) ? '剪掉贊助片段…' : /SplitChapters/.test(line) ? '依章節切檔…' : /EmbedThumbnail|EmbedSubtitle|Metadata/.test(line) ? '寫入封面和資訊…' : /\[download\]|DL:/.test(line) ? '' : (p.pct > 0 ? '' : '連線中…');
+  j.stage = /\[Merger\]|Merging/.test(line) ? '合併影像和聲音…' : /ExtractAudio/.test(line) ? '轉成 MP3…' : /SponsorBlock|ModifyChapters/.test(line) ? '剪掉贊助片段…' : /SplitChapters/.test(line) ? '依章節切檔…' : /EmbedThumbnail|EmbedSubtitle|Metadata/.test(line) ? '寫入封面和資訊…' : /\[download\]|DL:|\[fetch\]/.test(line) ? '' : (p.pct > 0 ? '' : '連線中…');
   if (!j.title) { const t = line.match(/Destination: (?:.*\/)?(.+?)\.[a-z0-9]+$/i); if (t) j.title = t[1].replace(/\s\[[\w-]{6,}\]$/, ''); }
   drawCard(j);
   if (Date.now() - fgLast > 2000) { fgLast = Date.now(); const r = Q.filter(x => x.state === 'run'); call('fgText', r.map(x => `${(x.title || x.site).slice(0, 18)} ${x.pct ? Math.round(x.pct) + '%' : ''}`).join('、')); }
@@ -431,7 +523,7 @@ window.onDone = s => {
 };
 
 function stText(j) {
-  if (j.state === 'run') return j.stage || [j.pct ? j.pct.toFixed(1) + '%' : '', j.size, j.speed, j.eta ? '剩 ' + fmtEta(j.eta) : '', j.item ? '第 ' + j.item + ' 部' : ''].filter(Boolean).join(' · ');
+  if (j.state === 'run') return j.stage || [j.pct ? j.pct.toFixed(1) + '%' : '', j.size, j.speed, j.eta ? '剩 ' + fmtEta(j.eta) : '', j.item ? '第 ' + j.item + ' 個' : ''].filter(Boolean).join(' · ');
   if (j.state === 'wait') return netWait ? '等 Wi-Fi（設定裡開了只用 Wi-Fi）' : '等前面的下載完';
   if (j.state === 'ok') return '已存到 ' + (j.files[0] ? j.files[0].path : '') + (j.files.length > 1 ? `（共 ${j.files.length} 個檔）` : '') + (j.took ? ' · 花了 ' + fmtEta(j.took) : '');
   return j.msg;
@@ -441,7 +533,7 @@ function cardHTML(j) {
   const stateCls = { run: 'run', ok: 'ok', bad: 'bad' }[j.state] || '';
   let acts = '';
   if (j.state === 'run' || j.state === 'wait') acts = `<button class="btn ghost" data-a="cancel" type="button">取消</button>`;
-  else if (j.state === 'ok') acts = `<button class="btn" data-a="open" type="button">開啟</button><button class="btn ghost" data-a="share" type="button">分享</button><button class="btn ghost" data-a="x" type="button">移除</button>`;
+  else if (j.state === 'ok') acts = `<button class="btn" data-a="open" type="button">播放</button><button class="btn ghost" data-a="share" type="button">分享</button><button class="btn ghost" data-a="x" type="button">移除</button>`;
   else acts = `<button class="btn" data-a="retry" type="button">重試</button>${j.state === 'bad' ? '<button class="btn ghost" data-a="detail" type="button">詳細</button>' : ''}<button class="btn ghost" data-a="x" type="button">移除</button>`;
   const tags = [qShow(j.q, j.res), j.playlist ? '清單' : '', j.section ? '片段' : '', j.chapters ? '章節' : '', j.sponsor ? '跳贊助' : ''].filter(Boolean);
   return `${thumbImg(j.thumb)}<div class="cb">
@@ -467,10 +559,10 @@ function openF(f) { if (!f) return; if (has('fileExists') && f.uri && !N.fileExi
 function shareF(f) { if (!f) return; has('shareFile') ? N.shareFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
 function act(j, a) {
   const f = (j.files || [])[0];
-  if (a === 'cancel') { j.stop = 1; if (j.state === 'wait') { j.state = 'cancel'; j.msg = '已取消'; drawCard(j); saveQ(); } else call('cancel', j.pid); }
-  else if (a === 'open') openF(f);
+  if (a === 'cancel') { j.stop = 1; if (j.state === 'wait' || j.igWait) { j.igWait = false; j.state = 'cancel'; j.msg = '已取消'; drawCard(j); saveQ(); } else call('cancel', j.pid); }
+  else if (a === 'open') playF(j.files, j.title);
   else if (a === 'share') shareF(f);
-  else if (a === 'retry') { j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
+  else if (a === 'retry') { j.noApi = false; j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
   else if (a === 'detail') toast(String(j.raw || j.msg).slice(-300), 7000);
   else if (a === 'x') { const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); const el = document.getElementById(j.id); if (el) el.remove(); counts(); saveQ(); }
 }
@@ -498,11 +590,14 @@ function restore() {
 // =====================================================================
 // 紀錄
 // =====================================================================
-let hFilter = '全部', hAsk = -1;
+let codeFor = -1;
+let hFilter = '全部', hAsk = -1, hShow = 100;
+const szOf = h => (h.files || []).reduce((a, x) => a + (+x.size || 0), 0);
+const hThumb = h => { const f = !h.gone && (h.files || []).find(x => /^image\//.test(x.mime || '')); return f ? f.uri : h.thumb; };   // 照片用自己的檔當縮圖，不會過期
 function saveHist(j) {
   const H = LS('hist') || [];
-  H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: j.res || 0, ok: j.state === 'ok', msg: j.msg, files: (j.files || []).slice(0, 20) });
-  LS('hist', H.slice(0, 400));
+  H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: j.res || 0, uploader: j.uploader || '', ok: j.state === 'ok', msg: j.msg, files: (j.files || []).slice(0, 20) });
+  LS('hist', H.slice(0, 1500));
 }
 function drawHist() {
   const H = LS('hist') || [], kw = $('#hSearch').value.trim().toLowerCase();
@@ -510,25 +605,30 @@ function drawHist() {
   if (!sites.includes(hFilter)) hFilter = '全部';
   $('#hSites').innerHTML = sites.length > 2 ? sites.map(s => `<button class="chip" type="button" data-s="${esc(s)}" aria-pressed="${s === hFilter}">${esc(s)}</button>`).join('') : '';
   $('#hSites').querySelectorAll('.chip').forEach(b => b.onclick = () => { hFilter = b.dataset.s; drawHist(); });
-  const L = H.map((h, i) => Object.assign({ i }, h)).filter(h => (hFilter === '全部' || (h.site || '其他') === hFilter) && (!kw || (h.title || '').toLowerCase().includes(kw) || (h.u || '').toLowerCase().includes(kw)));
+  const L = H.map((h, i) => Object.assign({ i }, h)).filter(h => (hFilter === '全部' || (h.site || '其他') === hFilter) && (!kw || (h.title || '').toLowerCase().includes(kw) || (h.u || '').toLowerCase().includes(kw) || (h.uploader || '').toLowerCase().includes(kw) || (h.site || '').toLowerCase().includes(kw)));
+  const so = $('#hSort').value;
+  L.sort((a, b) => so === 'old' ? a.t - b.t : so === 'big' ? szOf(b) - szOf(a) : so === 'small' ? szOf(a) - szOf(b) : so === 'title' ? (a.title || '').localeCompare(b.title || '', 'zh-Hant') : so === 'user' ? ((a.uploader || '\uffff').localeCompare(b.uploader || '\uffff') || b.t - a.t) : b.t - a.t);
+  const more = L.length > hShow;
   $('#hCount').textContent = H.length ? `${L.length} / ${H.length} 筆` : '';
   $('#bHClr').hidden = !H.length;
-  $('#hist').innerHTML = L.length ? L.map(h => {
-    const f = h.files && h.files[0], total = (h.files || []).reduce((a, x) => a + (+x.size || 0), 0);
-    return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}" data-i="${h.i}">${thumbImg(h.thumb)}<div class="cb">
+  $('#hist').innerHTML = L.length ? L.slice(0, hShow).map(h => {
+    const f = h.files && h.files[0], total = szOf(h);
+    return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}" data-i="${h.i}"><button class="tbtn" type="button" data-a="open" aria-label="播放">${thumbImg(hThumb(h))}</button><div class="cb">
       <div class="ct">${esc(h.title || h.u)}</div>
-      <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span><span>${fmtTime(h.t)}</span><span>${esc(qShow(h.q || 'best', h.res))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}</div>
+      <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span>${h.uploader ? `<button class="link who" type="button" data-a="who">${esc((h.site === 'Instagram' ? '@' : '') + h.uploader)}</button>` : ''}<span>${fmtTime(h.t)}</span><span>${esc(qShow(h.q || 'best', h.res))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}</div>
       ${h.gone ? '<div class="st mut">檔案已刪除</div>' : h.ok ? '' : `<div class="st">${esc(h.msg || '失敗')}</div>`}
       ${hAsk === h.i ? `<div class="ask"><span>刪掉手機裡的檔案？刪了就找不回來。</span><button class="btn sm danger" data-a="delYes" type="button">刪掉</button><button class="btn sm ghost" data-a="delNo" type="button">取消</button></div>` : ''}
-      <div class="acts">${h.ok && f && !h.gone ? '<button class="btn" data-a="open" type="button">開啟</button><button class="btn ghost" data-a="share" type="button">分享</button>' : ''}<button class="btn ghost" data-a="again" type="button">再下載</button><button class="btn ghost" data-a="copy" type="button">複製連結</button>${h.ok && f && !h.gone && has('deleteFile') ? '<button class="btn ghost" data-a="delFile" type="button">刪檔案</button>' : ''}<button class="btn ghost" data-a="del" type="button">刪紀錄</button></div>
+      <div class="acts">${h.ok && f && !h.gone ? '<button class="btn" data-a="open" type="button">播放</button><button class="btn ghost" data-a="share" type="button">分享</button>' : ''}<button class="btn ghost" data-a="again" type="button">再下載</button><button class="btn ghost" data-a="copy" type="button">複製連結</button>${h.ok && f && !h.gone && has('deleteFile') ? '<button class="btn ghost" data-a="delFile" type="button">刪檔案</button>' : ''}<button class="btn ghost" data-a="del" type="button">刪紀錄</button></div>
     </div></div>`;
-  }).join('') : `<p class="empty">${H.length ? '沒有符合的紀錄' : '還沒有下載紀錄'}</p>`;
+  }).join('') + (more ? `<button class="btn big" type="button" id="hMore">再顯示 100 筆（還有 ${L.length - hShow} 筆）</button>` : '') : `<p class="empty">${H.length ? '沒有符合的紀錄' : '還沒有下載紀錄'}</p>`;
+  const hm = $('#hMore'); if (hm) hm.onclick = () => { hShow += 100; drawHist(); };
 }
 $('#hist').onclick = e => {
   const b = e.target.closest('[data-a]'); if (!b) return;
   const i = +b.closest('.card').dataset.i, H = LS('hist') || [], h = H[i]; if (!h) return;
   const a = b.dataset.a, f = (h.files || [])[0];
-  if (a === 'open') openF(f);
+  if (a === 'open') { if (h.ok && !h.gone && f) playF(h.files, h.title); }
+  else if (a === 'who') { if (h.site === 'Instagram' && has('http')) openIg(h.uploader); else { $('#hSearch').value = h.uploader; hShow = 100; drawHist(); window.scrollTo(0, 0); } }
   else if (a === 'share') shareF(f);
   else if (a === 'again') { page('dl'); addUrls(h.u); }
   else if (a === 'copy') copyText(h.u);
@@ -537,7 +637,9 @@ $('#hist').onclick = e => {
   else if (a === 'delNo') { hAsk = -1; drawHist(); }
   else if (a === 'delYes') { let n = 0; (h.files || []).forEach(x => { if (x.uri && N.deleteFile(x.uri)) n++; }); h.gone = true; LS('hist', H); hAsk = -1; drawHist(); toast(n ? `刪掉 ${n} 個檔案` : '檔案可能已經不在了'); }
 };
-$('#hSearch').addEventListener('input', drawHist);
+$('#hSearch').addEventListener('input', () => { hShow = 100; drawHist(); });
+$('#hSort').onchange = () => { hShow = 100; LS('hsort', $('#hSort').value); drawHist(); };
+{ const v = LS('hsort'); if (v) $('#hSort').value = v; }
 $('#bHClr').onclick = () => $('#hClrAsk').hidden = false;
 $('#bHClrNo').onclick = () => $('#hClrAsk').hidden = true;
 $('#bHClrYes').onclick = () => { LS('hist', []); $('#hClrAsk').hidden = true; drawHist(); toast('紀錄已清空'); };
@@ -552,17 +654,33 @@ function drawSites() {
     return `<div class="site" data-i="${i}"><span class="badge">${esc(s.ab)}</span>
       <span class="site-b" data-a="home"><span class="site-n">${esc(s.k)}</span> <span class="lv ${s.lv}">${s.lv === 'g' ? '穩定' : '有時失敗'}</span>
       ${logged ? `<span class="ok-t"> · 已登入 ${fmtTime(c.time)}</span>` : ''}<span class="site-d" style="display:block">${esc(s.note)}</span></span>
-      <span class="site-acts">${s.ck && canLogin ? (logged ? '<button class="btn sm ghost" data-a="logout" type="button">登出</button>' : '<button class="btn sm" data-a="login" type="button">登入</button>') : ''}</span></div>`;
+      <span class="site-acts">${s.ck && canLogin ? (logged ? '<button class="btn sm ghost" data-a="logout" type="button">登出</button>' : '<button class="btn sm" data-a="login" type="button">登入</button><button class="btn sm ghost" data-a="code" type="button">貼代碼</button>') : ''}</span></div>
+      ${codeFor === i ? `<div class="codebox" data-i="${i}"><span class="mut small">${CK_CODE[s.ck] ? `電腦瀏覽器登入 ${esc(s.k)} → 按 F12 → Application（應用程式）→ 左邊 Cookies → 找到 <b>${CK_CODE[s.ck]}</b>，複製它的 Value 貼到這裡。也可以貼整串「名稱=值; 名稱=值」。` : `電腦瀏覽器登入 ${esc(s.k)} → 按 F12 → Network → 點任一個請求 → 把 Cookie 那一整串貼到這裡（名稱=值; 名稱=值）。`}</span>
+        <input id="codeIn" type="text" autocomplete="off" spellcheck="false" placeholder="${CK_CODE[s.ck] ? '貼上 ' + CK_CODE[s.ck] + ' 的值' : '貼上整串 Cookie'}">
+        <div class="row"><button class="btn sm primary" data-a="codeSave" type="button">儲存</button><button class="btn sm ghost" data-a="codeNo" type="button">取消</button></div></div>` : ''}`;
   }).join('');
   $('#ckSite').innerHTML = SITES.filter(s => s.ck).map(s => `<option value="${s.ck}">${esc(s.k)}</option>`).join('');
 }
 $('#sites').onclick = e => {
   const b = e.target.closest('[data-a]'); if (!b) return;
-  const s = SITES[+b.closest('.site').dataset.i];
+  const s = SITES[+b.closest('[data-i]').dataset.i];
+  if (b.dataset.a === 'code') { codeFor = SITES.indexOf(s); drawSites(); const el = $('#codeIn'); if (el) el.focus(); return; }
+  if (b.dataset.a === 'codeNo') { codeFor = -1; drawSites(); return; }
+  if (b.dataset.a === 'codeSave') { if (saveCode(s, $('#codeIn').value)) { codeFor = -1; drawSites(); toast(`${s.k} 的登入資料已儲存`); } return; }
   if (b.dataset.a === 'home') { if (has('browse')) N.browse(s.home, 'browse', '', ''); else call('openUrl', s.home); }
   else if (b.dataset.a === 'login') { N.browse(s.login, 'login', s.ck, s.dom); toast('登入後按右上角「完成登入」', 3500); }
   else if (b.dataset.a === 'logout') { N.clearCookies(s.ck); drawSites(); toast(`${s.k} 已登出`); }
 };
+function saveCode(s, text) {
+  text = String(text || '').trim().replace(/^cookie:\s*/i, ''); const n = CK_CODE[s.ck];
+  const d = '.' + s.dom.split(',')[0].replace(/^(www|m)\./, '');
+  let pairs = [];
+  if (/;/.test(text) || (n && text.startsWith(n + '=')) || (!n && /=/.test(text))) pairs = text.split(/;\s*/).map(p => { const i = p.indexOf('='); return i > 0 && p.slice(i + 1).trim() ? [p.slice(0, i).trim(), p.slice(i + 1).trim()] : null; }).filter(Boolean);
+  else if (n && text) pairs = [[n, text]];
+  if (!pairs.length) { toast('看不懂貼上的內容'); return false; }
+  const exp = Math.floor(Date.now() / 1000) + 365 * 86400;
+  return !!call('saveCookies', s.ck, '# Netscape HTTP Cookie File\n' + pairs.map(([k, v]) => `${d}\tTRUE\t/\tTRUE\t${exp}\t${k}\t${v}`).join('\n') + '\n');
+}
 $('#bCkImport').onclick = () => { if (!has('pickFile')) { toast('這版外殼不支援，請更新 APK'); return; } N.pickFile('text/*', 'cookie:' + $('#ckSite').value); };
 $('#bCkAll').onclick = () => $('#ckAllAsk').hidden = false;
 $('#bCkAllNo').onclick = () => $('#ckAllAsk').hidden = true;
@@ -666,9 +784,11 @@ function showUpd() {
   bar.dataset.key = key; bar.dataset.kind = sh ? 'apk' : 'ui'; bar.hidden = false;
 }
 $('#updGo').onclick = () => {
-  if ($('#updBar').dataset.kind === 'apk') { toast('下載新外殼中，等一下會跳出安裝畫面', 5000); N.installApk(updInfo.apk); }
+  if ($('#updBar').dataset.kind === 'apk') getApk(updInfo.apk);
   else { autoReload = true; toast('更新中…'); call('checkUpdate', updInfo.u); }
 };
+// 舊外殼（V0.1.06）在 App 裡下載大檔會不穩，改用瀏覽器下載；V0.1.07 起在 App 裡下載並顯示進度
+function getApk(u) { if (has('fetchJob')) { toast('下載新外殼中，下載完會跳出安裝畫面', 5000); N.installApk(u); } else { call('openUrl', u); toast('用瀏覽器下載新外殼，下載完點開安裝', 7000); } }
 $('#updLater').onclick = () => { LS('updSkip', $('#updBar').dataset.key); $('#updBar').hidden = true; };
 setInterval(() => autoCheck(false), 5 * 60e3);
 $('#bChk').onclick = () => {
@@ -687,9 +807,9 @@ $('#bChk').onclick = () => {
 window.onHttp = s => { const r = JSON.parse(s); settle(r.id, r); };
 window.onUpd = s => { const p = JSON.parse(s); $('#updMsg').textContent = p.msg; $('#bReload').hidden = !p.ok;
   if (autoReload) { autoReload = false; if (p.ok && has('reload')) N.reload(); else toast(p.msg, 4000); } };
-$('#bApk').onclick = () => { if (apkHref) N.installApk(apkHref); };
+$('#bApk').onclick = () => { if (apkHref) getApk(apkHref); };
 $('#bApkUrl').onclick = () => { const el = $('#apkUrl'); if (el.hidden) { el.hidden = false; el.focus(); return; } const u = el.value.trim(); if (!/^https?:\/\//.test(u)) { toast('先貼上 APK 的網址'); return; } if (!has('installApk')) { toast('這版外殼不支援，請用電腦重做 APK'); return; } N.installApk(u); };
-window.onApk = s => { const r = JSON.parse(s); $('#updMsg').textContent = r.msg; toast(r.msg, 4000); };
+window.onApk = s => { const r = JSON.parse(s); $('#updMsg').textContent = r.msg; if (r.stage === 'dl') { if (!$('#updBar').hidden) $('#updTxt').textContent = r.msg; } else toast(r.msg, 4000); };
 $('#bPick').onclick = () => { $('#updMsg').textContent = '選檔中…'; call('pickUpdate'); };
 $('#bReload').onclick = () => { if (has('reload')) N.reload(); else location.reload(); };
 $('#bResetUi').onclick = () => { if (has('resetUi')) N.resetUi(); else toast('這版外殼不支援'); };
@@ -710,6 +830,164 @@ function importBackup(text) {
   if (j.updurl) LS('updurl', j.updurl);
   applyTheme(); drawSet(); drawQual(); toast('已還原設定和紀錄');
 }
+
+// =====================================================================
+// IG 帳號瀏覽：一次載入 100 則，預設全勾，可以一次下載
+// =====================================================================
+const IGP = { user: '', uid: '', posts: [], sel: new Set(), next: '', more: true, loading: false, total: 0, priv: false };
+function igStat() {
+  const n = IGP.posts.length;
+  $('#igStat').textContent = `已載入 ${n}${IGP.total ? ' / ' + IGP.total : ''} 則 · 已選 ${IGP.sel.size} 則`;
+  $('#igDl').textContent = `下載 ${IGP.sel.size} 則`; $('#igDl').disabled = !IGP.sel.size;
+}
+function openIg(user, uid) {
+  user = String(user || '').replace(/^@/, '').trim(); if (!user) return;
+  if (!has('http')) { toast(friendly('IG_SHELL'), 4500); return; }
+  Object.assign(IGP, { user, uid: uid || '', posts: [], sel: new Set(), next: '', more: true, loading: false, total: 0, priv: false });
+  $('#igGrid').innerHTML = ''; $('#igName').textContent = '@' + user; $('#igMsg').textContent = ''; $('#igMore').hidden = true;
+  $('#igPane').hidden = false; $('#igPane').scrollTop = 0; document.body.classList.add('locked'); igStat();
+  igMore();
+}
+function igClose() { $('#igPane').hidden = true; IGP.user = ''; if ($('#player').hidden) document.body.classList.remove('locked'); }
+async function igMore() {
+  if (IGP.loading || !IGP.more) return;
+  IGP.loading = true; $('#igMore').disabled = true; $('#igMsg').textContent = '載入中…';
+  const me = IGP.user; let msg = '';
+  try {
+    if (!IGP.uid || !IGP.total) {
+      try { const j = await igGet('users/web_profile_info/?username=' + encodeURIComponent(me)); const u = j.data && j.data.user; if (u) { IGP.uid = u.id; IGP.total = (u.edge_owner_to_timeline_media && u.edge_owner_to_timeline_media.count) || 0; IGP.priv = !!(u.is_private && !u.followed_by_viewer); } }
+      catch (e) { if (!IGP.uid) throw e; }
+      if (!IGP.uid) throw new Error('IG_NOUSER');
+    }
+    const done = new Set((LS('hist') || []).filter(h => h.ok && !h.gone && h.site === 'Instagram').map(h => (igCode(h.u) || {}).code));
+    let added = 0;
+    while (added < 100 && IGP.more) {
+      const j = await igGet(`feed/user/${IGP.uid}/?count=33` + (IGP.next ? '&max_id=' + encodeURIComponent(IGP.next) : ''));
+      if (IGP.user !== me) return;
+      const batch = (j.items || []).map(igParse).filter(p => p.items.length && !IGP.posts.some(x => x.code === p.code));
+      batch.forEach(p => { p.had = done.has(p.code); IGP.posts.push(p); if (!p.had) IGP.sel.add(p.code); });
+      igDraw(batch); added += batch.length;
+      IGP.more = !!j.more_available && !!j.next_max_id; IGP.next = j.next_max_id || '';
+      igStat(); $('#igMsg').textContent = `載入中… ${IGP.posts.length} 則`;
+      if (IGP.more && added < 100) await sleep(800);     // 慢一點，免得被 IG 擋
+    }
+    msg = IGP.more ? '' : (IGP.posts.length ? '全部載入完了' : (IGP.priv ? '這是私人帳號，要先追蹤才看得到' : '這個帳號沒有貼文'));
+  } catch (e) { msg = friendly(String(e.message || e)); }
+  finally { if (IGP.user === me) { IGP.loading = false; $('#igMore').disabled = false; $('#igMore').hidden = !IGP.more; $('#igMore').textContent = '繼續載入（再 100 則）'; $('#igMsg').textContent = msg; igStat(); } }
+}
+function igDraw(batch) {
+  $('#igGrid').insertAdjacentHTML('beforeend', batch.map(p => `<button class="ig-t${IGP.sel.has(p.code) ? ' on' : ''}" type="button" data-c="${esc(p.code)}" aria-pressed="${IGP.sel.has(p.code)}">${thumbImg(p.small, 'ig-i')}${p.nv || p.items.length > 1 ? `<span class="ig-k">${p.nv ? '影片' : ''}${p.items.length > 1 ? ' ' + p.items.length + ' 個' : ''}</span>` : ''}${p.had ? '<span class="ig-had">已下載</span>' : ''}<span class="ig-c"></span></button>`).join(''));
+}
+$('#igGrid').onclick = e => { const b = e.target.closest('.ig-t'); if (!b) return; const c = b.dataset.c; if (IGP.sel.has(c)) IGP.sel.delete(c); else IGP.sel.add(c); b.classList.toggle('on', IGP.sel.has(c)); b.setAttribute('aria-pressed', IGP.sel.has(c)); igStat(); };
+function igMark(on) { IGP.sel = new Set(on ? IGP.posts.map(p => p.code) : []); document.querySelectorAll('#igGrid .ig-t').forEach(b => { b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); igStat(); }
+$('#igAll').onclick = () => igMark(true);
+$('#igNone').onclick = () => igMark(false);
+$('#igMore').onclick = () => igMore();
+$('#igClose').onclick = () => igClose();
+$('#igDl').onclick = () => {
+  const L = IGP.posts.filter(p => IGP.sel.has(p.code)); if (!L.length) return;
+  const who = IGP.user;
+  L.forEach(p => enqueue(`https://www.instagram.com/p/${p.code}/`, 'best', { ok: true, title: p.title, thumb: p.thumb, uploader: p.user || who, ig: p, heights: [] }, { bulk: true }));
+  igClose(); page('dl'); toast(`已加入 ${L.length} 則，會照順序下載`, 3500);
+};
+
+// =====================================================================
+// 內建播放器：影片、聲音、照片都在 App 裡看
+// 左右滑＝快轉（滑越快跳越多、越慢越精準）；點兩下左右＝跳 10 秒、中間＝播放暫停；往下滑＝關閉
+// =====================================================================
+const P = { list: [], i: 0, title: '', rate: 1, uiT: 0, land: false };
+const pEl = $('#player'), pv = $('#pv'), pim = $('#pi');
+const RATES = [1, 1.25, 1.5, 2, 0.5];
+function mimeGuess(n) { const e = (String(n || '').split('.').pop() || '').toLowerCase(); return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime', m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', ogg: 'audio/ogg', flac: 'audio/flac', wav: 'audio/wav', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic' })[e] || ''; }
+const mimeOf = f => (f && (f.mime && f.mime !== 'application/octet-stream' ? f.mime : mimeGuess(f.name))) || '';
+function playF(files, title, start) {
+  const L = (files || []).filter(f => f && f.uri && /^(video|audio|image)\//.test(mimeOf(f)));
+  if (!L.length) { openF((files || [])[0]); return; }
+  P.list = L; P.i = Math.max(0, Math.min(start || 0, L.length - 1)); P.title = title || '';
+  pEl.hidden = false; document.body.classList.add('locked'); call('keepOn', true); call('immersive', true);
+  pLoad();
+}
+function pPos(save) { const f = P.list[P.i]; if (!f || pv.hidden) return 0; const M = LS('pos') || {}; if (save === undefined) return M[f.uri] || 0;
+  if (isFinite(pv.duration) && pv.duration > 60) { if (pv.currentTime > 5 && pv.currentTime < pv.duration - 10) M[f.uri] = Math.floor(pv.currentTime); else delete M[f.uri]; const K = Object.keys(M); if (K.length > 300) delete M[K[0]]; LS('pos', M); } return 0; }
+function pLoad() {
+  const f = P.list[P.i], img = mimeOf(f).startsWith('image/');
+  $('#pErr').hidden = true; $('#pSeek').hidden = true;
+  $('#pTitle').textContent = (P.list.length > 1 ? `${P.i + 1}/${P.list.length}　` : '') + (P.title || f.name || '');
+  $('#pPrev').hidden = $('#pNext').hidden = P.list.length < 2;
+  pim.hidden = !img; pv.hidden = img; $('#pBot').hidden = img; $('#pPlay').hidden = img;
+  if (has('fileExists') && !N.fileExists(f.uri)) { pFail('檔案已經被刪除或搬走了'); return; }
+  if (img) { pv.pause(); pv.removeAttribute('src'); pv.load(); pim.src = f.uri; call('orient', 'auto'); pUi(true); }
+  else { pim.removeAttribute('src'); $('#pBar').value = 0; $('#pCur').textContent = '0:00'; $('#pDur').textContent = ''; pv.src = f.uri; pv.playbackRate = P.rate; const p = pv.play(); if (p && p.catch) p.catch(() => {}); pUi(); }
+}
+function pFail(msg) { $('#pErrMsg').textContent = msg; $('#pErr').hidden = false; pUi(true); }
+function pStep(d) { if (P.list.length < 2) return; pPos(true); P.i = (P.i + d + P.list.length) % P.list.length; pLoad(); }
+function pClose() { pPos(true); pv.pause(); pv.removeAttribute('src'); pv.load(); pim.removeAttribute('src'); pEl.hidden = true; if ($('#igPane').hidden) document.body.classList.remove('locked'); call('orient', 'auto'); call('keepOn', false); call('immersive', false); if (!$('#p_hist').classList.contains('on')) return; }
+function pUi(sticky) { pEl.classList.add('ui'); clearTimeout(P.uiT); if (!sticky && !pv.hidden && !pv.paused) P.uiT = setTimeout(() => pEl.classList.remove('ui'), 3000); }
+function pToggle() { if (pv.paused) { const p = pv.play(); if (p && p.catch) p.catch(() => {}); } else pv.pause(); }
+function pJump(d) { if (!isFinite(pv.duration)) return; pv.currentTime = Math.min(pv.duration, Math.max(0, pv.currentTime + d)); pHint(pv.currentTime, d); setTimeout(() => { if (!gs) $('#pSeek').hidden = true; }, 600); }
+function pHint(t, d) { const el = $('#pSeek'); el.hidden = false; el.innerHTML = `<b>${fmtDur(t) || '0:00'}</b> / ${fmtDur(pv.duration) || '0:00'}<span>${d >= 0 ? '+' : '−'}${fmtDur(Math.abs(d)) || '0:00'}</span>`; }
+pv.addEventListener('loadedmetadata', () => {
+  $('#pDur').textContent = fmtDur(pv.duration) || '0:00';
+  const p = pPos(); if (p > 5 && p < pv.duration - 10) { pv.currentTime = p; toast('從上次看到的 ' + fmtDur(p) + ' 繼續', 2000); }
+  P.land = pv.videoWidth > pv.videoHeight; call('orient', pv.videoWidth ? (P.land ? 'land' : 'port') : 'auto');
+});
+let pSaveT = 0;
+pv.addEventListener('timeupdate', () => { if (gs || !isFinite(pv.duration)) return; $('#pBar').value = Math.round(pv.currentTime / pv.duration * 1000); $('#pCur').textContent = fmtDur(pv.currentTime) || '0:00'; if (Date.now() - pSaveT > 5000) { pSaveT = Date.now(); pPos(true); } });
+pv.addEventListener('play', () => { $('#pPlay').textContent = '❚❚'; pUi(); });
+pv.addEventListener('pause', () => { $('#pPlay').textContent = '▶'; pUi(true); });
+pv.addEventListener('ended', () => { pPos(true); if (P.i + 1 < P.list.length) pStep(1); else pUi(true); });
+pv.addEventListener('error', () => { if (pv.getAttribute('src')) pFail('這個檔案在 App 裡播不了（格式不支援）。可以改用其他 App 開。'); });
+pim.addEventListener('error', () => { if (pim.getAttribute('src')) pFail('這張圖在 App 裡開不了。可以改用其他 App 開。'); });
+$('#pBar').addEventListener('input', () => { if (isFinite(pv.duration)) { pv.currentTime = $('#pBar').value / 1000 * pv.duration; $('#pCur').textContent = fmtDur(pv.currentTime) || '0:00'; pUi(); } });
+$('#pPlay').onclick = () => pToggle();
+$('#pPrev').onclick = () => pStep(-1);
+$('#pNext').onclick = () => pStep(1);
+$('#pClose').onclick = () => pClose();
+$('#pRate').onclick = () => { P.rate = RATES[(RATES.indexOf(P.rate) + 1) % RATES.length]; pv.playbackRate = P.rate; $('#pRate').textContent = P.rate + 'x'; pUi(); };
+$('#pRot').onclick = () => { P.land = !P.land; call('orient', P.land ? 'land' : 'port'); pUi(); };
+$('#pRot').hidden = !has('orient');
+const pExt = () => { const f = P.list[P.i]; if (f) { pv.pause(); openF(f); } };
+$('#pExt').onclick = pExt; $('#pErrBtn').onclick = pExt;
+// ---- 手勢
+let gs = null, lastTap = 0, tapT = 0;
+pEl.addEventListener('pointerdown', e => {
+  if (e.target.closest('button,input,#pErr')) return;
+  gs = { x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: pv.currentTime || 0, tgt: pv.currentTime || 0, applied: 0 };
+  try { pEl.setPointerCapture(e.pointerId); } catch (x) {}
+});
+pEl.addEventListener('pointermove', e => {
+  if (!gs) return;
+  const dx = e.clientX - gs.x0, dy = e.clientY - gs.y0, now = performance.now();
+  if (!gs.mode) {
+    if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2) gs.mode = pv.hidden ? 'swipe' : 'seek';
+    else if (dy > 24 && Math.abs(dy) > Math.abs(dx) * 1.5) gs.mode = 'down';
+    else return;
+    gs.lx = e.clientX; gs.lt = now; gs.base = gs.tgt = pv.currentTime || 0;
+  }
+  if (gs.mode === 'seek' && isFinite(pv.duration)) {
+    const step = e.clientX - gs.lx, dt = Math.max(now - gs.lt, 1), v = Math.abs(step) / dt;      // 手指速度（像素／毫秒）
+    const maxGain = Math.min(4, Math.max(0.35, pv.duration / 400));                               // 長片快滑一次能跳比較遠
+    const k = Math.min(1, Math.max(0, (v - 0.12) / 1.4));
+    const gain = 0.035 + (maxGain - 0.035) * k * k;                                               // 每滑一個像素跳幾秒：慢＝很細，快＝很多
+    gs.tgt = Math.min(pv.duration, Math.max(0, gs.tgt + step * gain)); gs.lx = e.clientX; gs.lt = now;
+    pHint(gs.tgt, gs.tgt - gs.base);
+    $('#pBar').value = Math.round(gs.tgt / pv.duration * 1000); $('#pCur').textContent = fmtDur(gs.tgt) || '0:00';
+    if (now - gs.applied > 160) { gs.applied = now; pv.currentTime = gs.tgt; }                    // 邊滑邊看畫面
+  }
+});
+function pEnd(e, cancel) {
+  const g = gs; gs = null; if (!g) return;
+  $('#pSeek').hidden = true;
+  if (cancel) return;
+  if (g.mode === 'seek') { if (isFinite(pv.duration)) pv.currentTime = g.tgt; pUi(); return; }
+  if (g.mode === 'swipe') { pStep(e.clientX - g.x0 < 0 ? 1 : -1); return; }
+  if (g.mode === 'down') { if (e.clientY - g.y0 > 110) pClose(); return; }
+  const now = performance.now(), w = pEl.clientWidth;
+  if (now - lastTap < 300 && !pv.hidden) { clearTimeout(tapT); lastTap = 0; if (e.clientX < w * 0.35) pJump(-10); else if (e.clientX > w * 0.65) pJump(10); else pToggle(); }
+  else { lastTap = now; tapT = setTimeout(() => { if (pEl.classList.contains('ui') && !pv.hidden && !pv.paused) { clearTimeout(P.uiT); pEl.classList.remove('ui'); } else pUi(); }, 300); }
+}
+pEl.addEventListener('pointerup', e => pEnd(e, false));
+pEl.addEventListener('pointercancel', e => pEnd(e, true));
 
 // =====================================================================
 // 開始

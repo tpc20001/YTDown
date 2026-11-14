@@ -29,7 +29,7 @@
     </div>
 
     <div class="panel">
-      <textarea id="url" rows="2" placeholder="貼上影片網址，或打字搜尋影片" autocomplete="off" spellcheck="false"></textarea>
+      <textarea id="url" rows="2" placeholder="貼上網址，或打字搜尋影片、IG 帳號" autocomplete="off" spellcheck="false"></textarea>
       <div class="row">
         <button class="btn sm" id="bPaste" type="button">貼上</button>
         <button class="btn sm ghost" id="bClear" type="button">清除</button>
@@ -72,7 +72,8 @@
   <!-- 紀錄 -->
   <section id="p_hist" class="pg">
     <div class="panel tight">
-      <input id="hSearch" type="search" placeholder="搜尋標題或網址" autocomplete="off">
+      <div class="row nowrap"><input id="hSearch" type="search" placeholder="搜尋標題、作者、帳號" autocomplete="off">
+        <select id="hSort" aria-label="排序"><option value="new">最新</option><option value="old">最舊</option><option value="big">檔案最大</option><option value="small">檔案最小</option><option value="title">標題</option><option value="user">作者</option></select></div>
       <div id="hSites" class="chips"></div>
     </div>
     <div class="secHead"><h2>下載紀錄</h2><span id="hCount" class="mut small"></span><span class="grow"></span><button class="link" id="bHClr" type="button">全部清空</button></div>
@@ -168,6 +169,24 @@
   <button class="tab" data-p="sites" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v5H4zM13 14h7v5h-7z"/></svg><span>平台</span></button>
   <button class="tab" data-p="set" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>設定</span></button>
 </nav>
+<!-- IG 帳號瀏覽 -->
+<div id="igPane" class="pane" hidden>
+  <div class="pane-h"><button class="btn sm ghost" id="igClose" type="button" aria-label="關閉">✕</button><div class="pane-t"><b id="igName"></b><span id="igStat" class="mut small"></span></div></div>
+  <div class="pane-bar"><button class="btn sm ghost" id="igAll" type="button">全選</button><button class="btn sm ghost" id="igNone" type="button">全不選</button><span class="grow"></span><button class="btn sm primary" id="igDl" type="button">下載</button></div>
+  <div id="igGrid" class="ig-grid"></div>
+  <div class="pane-f"><span id="igMsg" class="mut small"></span><button class="btn big" id="igMore" type="button" hidden>繼續載入（再 100 則）</button></div>
+</div>
+
+<!-- 內建播放器 -->
+<div id="player" class="player" hidden>
+  <video id="pv" playsinline preload="metadata"></video>
+  <img id="pi" alt="" hidden>
+  <div id="pSeek" class="p-seek" hidden></div>
+  <div id="pErr" class="p-err" hidden><span id="pErrMsg"></span><button class="btn" id="pErrBtn" type="button">用其他 App 開</button></div>
+  <div class="p-top"><button id="pClose" type="button" aria-label="關閉">✕</button><span id="pTitle"></span><button id="pExt" type="button">其他 App</button></div>
+  <div class="p-mid"><button id="pPrev" type="button" aria-label="上一個">‹</button><button id="pPlay" type="button" aria-label="播放或暫停">▶</button><button id="pNext" type="button" aria-label="下一個">›</button></div>
+  <div class="p-bot" id="pBot"><span id="pCur">0:00</span><input type="range" id="pBar" min="0" max="1000" value="0" aria-label="播放進度"><span id="pDur"></span><button id="pRate" type="button">1x</button><button id="pRot" type="button" aria-label="轉向">⟳</button></div>
+</div>
 <div id="toast" class="toast" hidden></div>
 <script src="app.js"></script>
 </body>

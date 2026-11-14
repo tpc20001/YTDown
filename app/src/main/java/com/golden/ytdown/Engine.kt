@@ -111,10 +111,10 @@ object Engine {
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", t)
         return JSONObject().put("name", f.name).put("path", t.absolutePath).put("uri", uri.toString()).put("size", size).put("mime", mime)
     }
-    private fun publishAll(dir: File, sub: String, dest: String): JSONArray {
+    private fun publishAll(dir: File, sub: String, dest: String, byName: Boolean = false): JSONArray {
         val out = JSONArray(); val skip = setOf("part", "ytdl", "json", "temp", "tmp")
-        dir.walkTopDown().filter { it.isFile && it.length() > 0 && it.extension.lowercase() !in skip }
-            .sortedByDescending { it.length() }.forEach { out.put(publish(it, sub, dest)) }
+        val all = dir.walkTopDown().filter { it.isFile && it.length() > 0 && it.extension.lowercase() !in skip }
+        (if (byName) all.sortedBy { it.name } else all.sortedByDescending { it.length() }).forEach { out.put(publish(it, sub, dest)) }
         return out
     }
 
@@ -185,6 +185,49 @@ object Engine {
             } catch (e: Throwable) {
                 emit("onDone", JSONObject().put("id", id).put("ok", false).put("msg", err(e)).toString())
                 if (notify) Notify.done(ctx, title.ifEmpty { url }, false)
+            } finally { dir.deleteRecursively(); jobs.remove(id); live.remove(id); sync() }
+        }
+        sync()
+    }
+    /**
+     * 直接下載一批網址（不經過 yt-dlp），給 IG 照片這類用。
+     * spec = {id, items:[{url,name}], sub, dest, title, notify, headers:{}, cookies}
+     * 進度、結束的格式跟 job() 一樣，畫面那邊不用分。
+     */
+    fun fetchJob(spec: String) {
+        val o = try { JSONObject(spec) } catch (e: Exception) { return }
+        val id = o.optString("id"); val items = o.optJSONArray("items") ?: return
+        if (id.isEmpty() || items.length() == 0 || jobs.containsKey(id)) return
+        val sub = cleanSub(o.optString("sub", "")); val dest = o.optString("dest", "")
+        val title = o.optString("title", ""); val notify = o.optBoolean("notify", true)
+        val hdr = o.optJSONObject("headers"); val ck = o.optString("cookies", "")
+        jobs[id] = scope.launch {
+            val dir = File(ctx.getExternalFilesDir(null) ?: ctx.cacheDir, "tmp_" + id.replace(Regex("[^A-Za-z0-9_~-]"), "_"))
+            dir.deleteRecursively(); dir.mkdirs()
+            try {
+                val n = items.length(); var last = 0L
+                for (i in 0 until n) {
+                    val it = items.getJSONObject(i)
+                    val name = it.optString("name", "file_$i").replace(Regex("[\\\\/:*?\"<>|\\n\\r]"), "_").take(120)
+                    Net.download(it.getString("url"), hdr, ck, File(dir, name), { isActive }) { done, total ->
+                        val now = System.currentTimeMillis()
+                        if (now - last > 300) {
+                            last = now
+                            val part = if (total > 0) done.toDouble() / total else 0.0
+                            val j = JSONObject().put("id", id).put("pct", (i + part) / n * 100).put("eta", 0).put("line", "[fetch] ${i + 1}/$n").toString()
+                            live[id] = j; emit("onProg", j)
+                        }
+                    }
+                }
+                val files = publishAll(dir, sub, dest, true)
+                if (files.length() == 0) throw Exception("沒有產生檔案")
+                emit("onDone", JSONObject().put("id", id).put("ok", true).put("files", files).put("file", files.getJSONObject(0).getString("path")).toString())
+                if (notify) Notify.done(ctx, title.ifEmpty { files.getJSONObject(0).getString("name") }, true)
+            } catch (e: CancellationException) {
+                emit("onDone", JSONObject().put("id", id).put("ok", false).put("msg", "已取消").toString())
+            } catch (e: Throwable) {
+                emit("onDone", JSONObject().put("id", id).put("ok", false).put("msg", err(e)).toString())
+                if (notify) Notify.done(ctx, title.ifEmpty { "下載" }, false)
             } finally { dir.deleteRecursively(); jobs.remove(id); live.remove(id); sync() }
         }
         sync()
