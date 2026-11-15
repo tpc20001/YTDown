@@ -49,7 +49,7 @@ import java.util.zip.ZipInputStream
  */
 class MainActivity : AppCompatActivity() {
     companion object {
-        const val SHELL = "YTD_V0.1.08"
+        const val SHELL = "YTD_V0.1.09"
         const val ACTION_PASTE = "com.golden.ytdown.PASTE"
         const val ACTION_BROWSE = "com.golden.ytdown.BROWSE"
     }
@@ -209,6 +209,14 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun job(spec: String) = Engine.job(spec)
         @JavascriptInterface fun cancel(id: String) = Engine.cancel(id)
         @JavascriptInterface fun fetchJob(spec: String) = Engine.fetchJob(spec)
+        // ---- Telegram（用自己的帳號登入）
+        @JavascriptInterface fun tgInfo(): String = Tg.info()
+        @JavascriptInterface fun tgStart(apiId: String, apiHash: String) = Tg.start(apiId.trim().toIntOrNull() ?: 0, apiHash.trim())
+        @JavascriptInterface fun tgPhone(p: String) = Tg.phone(p)
+        @JavascriptInterface fun tgCode(c: String) = Tg.code(c)
+        @JavascriptInterface fun tgPassword(p: String) = Tg.password(p)
+        @JavascriptInterface fun tgLogout() = Tg.forget()
+        @JavascriptInterface fun tgJob(spec: String) = Tg.job(spec)
         @JavascriptInterface fun probe(id: String, url: String, spec: String) = Engine.probe(id, url, spec)
         @JavascriptInterface fun exec(id: String, url: String, spec: String) = Engine.exec(id, url, spec)
         @JavascriptInterface fun updateCore() = Engine.updateCore("stable")

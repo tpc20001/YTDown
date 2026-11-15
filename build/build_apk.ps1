@@ -57,10 +57,10 @@ if (-not (Test-Path $sdkm)) {
     Remove-Item $z, $x -Recurse -Force -ErrorAction SilentlyContinue
 }
 $env:ANDROID_HOME = $sdk; $env:ANDROID_SDK_ROOT = $sdk
-$need = @('platforms;android-34', 'build-tools;34.0.0', 'platform-tools')
+$need = @('platforms;android-37', 'build-tools;35.0.0', 'platform-tools')
 $missing = @()
-if (-not (Test-Path (Join-Path $sdk 'platforms\android-34'))) { $missing += $need[0] }
-if (-not (Test-Path (Join-Path $sdk 'build-tools\34.0.0'))) { $missing += $need[1] }
+if (-not (Test-Path (Join-Path $sdk 'platforms\android-37'))) { $missing += $need[0] }
+if (-not (Test-Path (Join-Path $sdk 'build-tools\35.0.0'))) { $missing += $need[1] }
 if (-not (Test-Path (Join-Path $sdk 'platform-tools\adb.exe'))) { $missing += $need[2] }
 if ($missing.Count -gt 0) {
     Write-Host 'Accepting Android SDK licenses...' -ForegroundColor Yellow
@@ -71,11 +71,11 @@ if ($missing.Count -gt 0) {
 }
 Write-Host 'SDK OK' -ForegroundColor Green
 
-Step '[3/6] Gradle 8.7'
-$gradle = Join-Path $cache 'gradle-8.7\bin\gradle.bat'
+Step '[3/6] Gradle 8.13'
+$gradle = Join-Path $cache 'gradle-8.13\bin\gradle.bat'
 if (-not (Test-Path $gradle)) {
     $z = Join-Path $cache 'gradle.zip'
-    Get-File 'https://services.gradle.org/distributions/gradle-8.7-bin.zip' $z 'Gradle 8.7 (about 130 MB)'
+    Get-File 'https://services.gradle.org/distributions/gradle-8.13-bin.zip' $z 'Gradle 8.13 (about 130 MB)'
     Expand-Archive $z $cache -Force; Remove-Item $z -Force
 }
 Write-Host 'Gradle OK' -ForegroundColor Green

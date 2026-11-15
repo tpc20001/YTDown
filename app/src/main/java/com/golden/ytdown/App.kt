@@ -16,6 +16,7 @@ class App : Application() {
         // aria2 加速下載（裝不起來也不影響一般下載）
         try { Aria2c.getInstance().init(this); aria2 = true } catch (e: Throwable) { Log.w("YTD", "aria2c", e) }
         Notify.channels(this)
+        try { Tg.boot() } catch (e: Throwable) { Log.w("YTD", "tg", e) }     // 之前登入過 Telegram 就自動接回
     }
     companion object {
         lateinit var ctx: Context

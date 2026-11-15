@@ -255,6 +255,36 @@ object Engine {
         }
         sync()
     }
+    /**
+     * 給其他下載方式（例如 Telegram）用：幫它處理暫存資料夾、存檔、通知、背景服務，結果一樣走 onProg／onDone。
+     * work(dir, prog(百分比, 說明), setTitle)
+     */
+    fun external(o: JSONObject, sub0: String, work: suspend (File, (Double, String) -> Unit, (String) -> Unit) -> Unit) {
+        val id = o.optString("id"); if (id.isEmpty() || jobs.containsKey(id)) return
+        val sub = cleanSub(o.optString("sub", "")); val dest = o.optString("dest", "")
+        var title = o.optString("title", ""); val notify = o.optBoolean("notify", true); val gallery = o.optString("gallery", "")
+        jobs[id] = scope.launch {
+            val dir = File(ctx.getExternalFilesDir(null) ?: ctx.cacheDir, "tmp_" + id.replace(Regex("[^A-Za-z0-9_~-]"), "_"))
+            dir.deleteRecursively(); dir.mkdirs()
+            var last = 0L
+            try {
+                work(dir, { pct, line ->
+                    val now = System.currentTimeMillis()
+                    if (now - last > 300) { last = now; val j = JSONObject().put("id", id).put("pct", pct).put("eta", 0).put("line", line).toString(); live[id] = j; emit("onProg", j) }
+                }, { t -> title = t; emit("onTitle", JSONObject().put("id", id).put("title", t).toString()) })
+                val files = publishAll(dir, sub, dest, true, gallery)
+                if (files.length() == 0) throw Exception("沒有產生檔案")
+                emit("onDone", JSONObject().put("id", id).put("ok", true).put("files", files).put("file", files.getJSONObject(0).getString("path")).toString())
+                if (notify) Notify.done(ctx, title.ifEmpty { files.getJSONObject(0).getString("name") }, true)
+            } catch (e: CancellationException) {
+                emit("onDone", JSONObject().put("id", id).put("ok", false).put("msg", "已取消").toString())
+            } catch (e: Throwable) {
+                emit("onDone", JSONObject().put("id", id).put("ok", false).put("msg", err(e)).toString())
+                if (notify) Notify.done(ctx, title.ifEmpty { sub0 }, false)
+            } finally { dir.deleteRecursively(); jobs.remove(id); live.remove(id); sync() }
+        }
+        sync()
+    }
     fun cancel(id: String) { try { YoutubeDL.getInstance().destroyProcessById(id) } catch (_: Exception) {}; jobs[id]?.cancel() }
 
     /** 解析影片資訊（不下載）→ onInfo */

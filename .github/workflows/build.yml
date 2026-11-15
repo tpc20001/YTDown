@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: gradle/actions/setup-gradle@v4
-        with: { gradle-version: '8.7' }
+        with: { gradle-version: '8.13' }
       - name: 放上簽章鑰匙
         env: { KEYSTORE_B64: '${{ secrets.KEYSTORE_B64 }}' }
         run: |
@@ -39,6 +39,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: '${{ steps.v.outputs.shell }}', path: out/ }
       - uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'      # 只有 main 才發佈，其他分支只是試打包
         with:
           tag_name: '${{ steps.v.outputs.shell }}-${{ steps.v.outputs.ui }}'
           name: '${{ steps.v.outputs.shell }} / ${{ steps.v.outputs.ui }}'
