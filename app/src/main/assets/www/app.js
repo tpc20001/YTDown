@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.38';
+const UI_VER = 'YTD_UI_V0.1.39';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.39', ['下載頁的大畫面下面多了「排隊清單」：其他正在下載、排隊中的都看得到，可以個別取消', '同時下載預設改成 3 個，並依平台自動限制：YouTube 最多 2 個（每個本身已經多線）、Telegram 最多 3 個、IG 一次 1 個（慢慢抓）']],
   ['YTD_UI_V0.1.38', ['Telegram 登入後不再先預覽，貼上就直接下載', '預覽失敗不再顯示紅字（只有需要你處理的，例如要登入，才會提示）', '回到 App 時多讀幾次剪貼簿，平板上也能穩定自動下載']],
   ['YTD_V0.1.10（外殼）／YTD_UI_V0.1.37', ['修正：Telegram 登入一直卡在「連線到 Telegram 中…」']],
   ['YTD_UI_V0.1.36', ['「相容格式優先」：同樣的解析度優先抓 H.264（幾乎所有手機、平板都能播），沒有才依序退到 VP9、最後才是 AV1', '聲音優先抓 AAC（m4a）']],
@@ -78,7 +79,7 @@ const YT_TRIES = [[YT_EJS], [YT_EJS, ['--extractor-args', 'youtube:player_client
 const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 
 // ---------- 設定
-const DEF = { quality: 'best', conc: 2, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
+const DEF = { quality: 'best', conc: 3, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
   auto: true, autoUpd: true, autoDl: true, autoPlay: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
   igSlow: true, ttHd: true, ytFast: true, ytConn: 8, noAv1: true, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
 let S = Object.assign({}, DEF, LS('set') || {});
@@ -513,8 +514,10 @@ function pump() {
     netWait = !!(n.metered || !n.wifi);
     if (netWait && Q.some(j => j.state === 'wait')) { Q.filter(j => j.state === 'wait').forEach(drawCard); counts(); return; }
   } else netWait = false;
+  const CAP = { YouTube: 2, Telegram: 3 };      // 各平台同時最多幾個（YouTube 每個本身已經多線）
   for (const n of [...Q].reverse().filter(j => j.state === 'wait')) {
     if (running() >= S.conc) break;
+    if (CAP[n.site] && Q.filter(j => j.state === 'run' && j.site === n.site).length >= CAP[n.site]) continue;
     // IG 慢慢來：一次只抓一則，而且要等上一則結束後隔一下
     if (n.site === 'Instagram' && S.igSlow && (Date.now() < igNext || Q.some(j => j.state === 'run' && j.site === 'Instagram'))) continue;
     startJob(n);
@@ -700,7 +703,7 @@ function cardHTML(j) {
     <div class="st">${esc(stText(j))}</div>
     <div class="acts">${acts}</div></div>`;
 }
-function drawCard(j) { drawStage(); counts(); }
+function drawCard(j) { drawStage(); drawQueue(); counts(); }
 
 // =====================================================================
 // 大畫面：下載頁中間只顯示「目前這一個」
@@ -715,7 +718,7 @@ function curJob() {
 function drawStage() {
   const el = $('#stage'), box = $('#stageInfo'), j = curJob();
   const waitN = Q.filter(x => x.state === 'wait').length, runN = running();
-  $('#stageMore').textContent = (runN > 1 || waitN) ? `正在下載 ${runN} 個${waitN ? '，還有 ' + waitN + ' 個排隊' : ''}` : '';
+  $('#stageMore').textContent = '';
   if (!j) { if (stg.key !== 'empty') { stg.id = ''; stg.key = 'empty'; stg.idx = 0; el.className = 'stage empty'; el.innerHTML = '<p>複製影片或貼文的網址，再打開 App，<br>就會自動下載並顯示在這裡。</p>'; box.innerHTML = ''; } return; }
   const M = j.state === 'ok' ? mediaOf(j.files) : [];
   if (stg.id !== j.id) stg.idx = 0;
@@ -797,6 +800,18 @@ function slideTo(n, dir, fromAuto) {
     if (v) autoPlayVid(v, true);                                           // 影片：滑進來的時候就開始播
     else { clearTimeout(auto.t); auto.t = setTimeout(() => { if (auto.on) slideTo(stg.idx + 1, 1, true); }, 950 + 3200); }
   }
+}
+function drawQueue() {
+  const cur = curJob(), L = Q.filter(j => (j.state === 'run' || j.state === 'wait') && j !== cur).sort((a, b) => (a.state === b.state ? (a.t || 0) - (b.t || 0) : a.state === 'run' ? -1 : 1));
+  const box = $('#qList'); if (!box) return;
+  box.hidden = !L.length;
+  if (!L.length) { box.innerHTML = ''; return; }
+  const key = L.map(j => j.id + j.state + (j.title || '') + (j.thumb ? 1 : 0)).join('|');
+  if (box.dataset.key !== key) {
+    box.dataset.key = key;
+    box.innerHTML = `<div class="ql-h">排隊清單 <span class="mut small">${L.filter(j => j.state === 'run').length} 個下載中 · ${L.filter(j => j.state === 'wait').length} 個排隊</span></div>` + L.map(j => `<div class="ql" data-id="${j.id}">${thumbImg(j.thumb, 'ql-t')}<div class="ql-b"><div class="ql-n">${esc(j.title || j.url)}</div><div class="ql-m"><span class="badge">${esc(j.ab)}</span><span class="ql-s"></span></div><div class="bar"><i></i></div></div><button class="btn sm ghost" data-a="cancel" type="button">取消</button></div>`).join('');
+  }
+  L.forEach(j => { const r = box.querySelector(`[data-id="${j.id}"]`); if (!r) return; r.querySelector('.bar i').style.width = (j.state === 'run' ? Math.max(2, j.pct || 0) : 0) + '%'; r.querySelector('.ql-s').textContent = j.state === 'run' ? [j.pct ? Math.round(j.pct) + '%' : '連線中', j.speed].filter(Boolean).join(' · ') : stText(j); });
 }
 function stageStep(d) { autoStop(); slideTo(stg.idx + d, d, false); }
 
@@ -949,6 +964,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
   el.addEventListener('pointerup', e => end(e, false));
   el.addEventListener('pointercancel', e => end(e, true));
   el.addEventListener('dragstart', e => e.preventDefault());
+  $('#qList').addEventListener('click', e => { const b = e.target.closest('[data-a]'), r = e.target.closest('.ql'); if (!b || !r) return; const j = Q.find(x => x.id === r.dataset.id); if (j) act(j, b.dataset.a); });
   $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (!b || !j) return; if (b.dataset.a === 'open') { autoStop(); stagePause(); } act(j, b.dataset.a); });
 }
 function openF(f) { if (!f) return; if (has('fileExists') && f.uri && !N.fileExists(f.uri)) { toast('檔案已經被刪除或搬走了'); return; } has('openFile') ? N.openFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
