@@ -288,3 +288,10 @@ body.locked{overflow:hidden}
 /* ---- V0.1.29：大畫面的滑動換張 ---- */
 .st-slide{position:absolute;inset:0;transition:transform .9s cubic-bezier(.45,0,.2,1);will-change:transform}
 @media (prefers-reduced-motion:reduce){.st-slide{transition-duration:.01s}}
+
+/* ---- V0.1.30：膠卷 ---- */
+.reel{position:absolute;inset:0;display:flex;flex-wrap:nowrap;will-change:transform}
+.fr{flex:none;height:100%;min-width:40px;position:relative;background:#000}
+.fr img,.fr video{height:100%;width:auto;max-width:none;display:block;pointer-events:none;-webkit-user-drag:none;user-select:none}
+.fr-k{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:26px;display:grid;place-items:center;pointer-events:none}
+.fr-k[hidden]{display:none}
