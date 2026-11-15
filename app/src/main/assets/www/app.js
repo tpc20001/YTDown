@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.30';
+const UI_VER = 'YTD_UI_V0.1.31';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.31', ['多張的貼文改成像 IG 那樣一頁一張：滑一下就換下一張，會自動對齊，張跟張之間留一點空隙', '自動播放：每張照片停 1 秒，用 0.5 秒滑到下一張，最後一張會接回第一張', '影片那一頁：滑進來就開始播，停在這頁完整播一次，再播的時候滑到下一張']],
   ['YTD_UI_V0.1.30', ['多張的貼文改成「膠卷」：所有照片一格接一格並排、中間沒有縫，慢慢往左捲動，一直循環', '膠卷裡的影片：進畫面就開始播，捲到正中間會停住完整播一次，再播的時候繼續往左捲', '可以用手指左右拖動膠卷；點照片放大看，點影片播放／暫停']],
   ['YTD_UI_V0.1.29', ['下載完 2 秒後自動播放：影片連播 3 次', '多張的貼文會自動輪播：照片每張停幾秒，慢慢往左滑到下一張，一直循環', '輪播遇到影片：滑進來時就開始播，停在中間完整播一次，再播的時候滑出去換下一個', '換張有滑動的動畫；碰一下畫面就停止自動播放（設定可關）']],
   ['YTD_UI_V0.1.28', ['修正：多張貼文上的「‹ ›」按鈕會變成放大，現在會正確換張']],
@@ -674,13 +675,13 @@ function drawStage() {
     if (M.length) {
       const f = M[stg.idx];
       m = `<div class="st-slide cur">${slideHTML(j, f)}</div><button class="st-play" type="button" aria-label="播放"${mimeOf(f).startsWith('image/') ? ' hidden' : ''}>▶</button><div class="st-hint" hidden></div><div class="st-ctl" hidden><span class="st-cur">0:00</span><input type="range" class="st-bar" min="0" max="1000" value="0" aria-label="播放進度"><span class="st-dur"></span></div>`;
-      if (M.length > 1) m = `<div class="reel"></div><span class="st-count">1 / ${M.length}</span>`;      // 多張：膠卷
+      if (M.length > 1) m = `<div class="pgr"></div><span class="st-count">1 / ${M.length}</span>`;      // 多張：一頁一張
     } else {
       m = (j.thumb ? `<img class="st-m dim" src="${esc(j.thumb)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '')
         + (j.state === 'ok' ? '' : `<div class="st-over"><div class="st-pct"></div><div class="bar"><i></i></div><div class="st-txt"></div></div>`);
     }
     el.innerHTML = m;
-    if (M.length > 1) reelBuild(j, M); else reel.el = null;
+    if (M.length > 1) pagerBuild(j, M); else pager.el = null;
     const acts = (j.state === 'run' || j.state === 'wait') ? '<button class="btn ghost" data-a="cancel" type="button">取消</button>'
       : j.state === 'ok' ? '<button class="btn" data-a="open" type="button">全螢幕播放</button><button class="btn ghost" data-a="share" type="button">分享</button><button class="btn ghost" data-a="x" type="button">清掉</button>'
       : `<button class="btn" data-a="retry" type="button">重試</button>${j.state === 'bad' ? '<button class="btn ghost" data-a="detail" type="button">詳細</button>' : ''}<button class="btn ghost" data-a="x" type="button">清掉</button>`;
@@ -742,74 +743,58 @@ function slideTo(n, dir, fromAuto) {
 }
 function stageStep(d) { autoStop(); slideTo(stg.idx + d, d, false); }
 
-// ---- 膠卷：多張的貼文，一格接一格並排，慢慢往左捲，循環
-const REEL_SPEED = 42;          // 每秒捲幾個像素
-const reel = { el: null, n: 0, one: '', off: 0, setW: 0, hold: null, last: 0, mAt: 0, cAt: 0, born: 0, placed: false, raf: 0 };
-function reelBuild(j, M) {
-  const el = stageEl.querySelector('.reel');
-  Object.assign(reel, { el, n: M.length, off: 0, setW: 0, hold: null, last: 0, mAt: 0, cAt: 0, born: performance.now(), placed: false });
-  reel.one = M.map((f, i) => `<div class="fr" data-n="${i}">${mimeOf(f).startsWith('image/') ? `<img src="${esc(f.uri)}" alt="" draggable="false">` : `<video src="${esc(f.uri)}${mimeOf(f).startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline></video><span class="fr-k">▶</span>`}</div>`).join('');
-  el.innerHTML = reel.one;
-  el.addEventListener('ended', e => { if (e.target.tagName === 'VIDEO') reelEnded(e.target); }, true);
+// ---- 多張的貼文：像 IG 一樣一頁一張，滑一下換一張（會自動對齊），張跟張之間留一點空隙
+const PG_GAP = 10;
+const pager = { el: null, n: 0, idx: 0, drag: 0, t: 0 };
+const pagerOn = () => !!(pager.el && pager.el.isConnected);
+function pagerSet(ms) {
+  if (!pagerOn()) return;
+  pager.el.style.transition = ms ? `transform ${ms}ms cubic-bezier(.25,.8,.3,1)` : 'none';
+  pager.el.style.transform = `translate3d(${-pager.idx * (stageEl.clientWidth + PG_GAP) + pager.drag}px,0,0)`;
+}
+const pagerVid = () => { const sl = pagerOn() && pager.el.children[pager.idx]; return sl ? sl.querySelector('video') : null; };
+function pagerPlay(v) { try { v.currentTime = 0; } catch (e) {} const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+function pagerBuild(j, M) {
+  const el = stageEl.querySelector('.pgr'); clearTimeout(pager.t);
+  Object.assign(pager, { el, n: M.length, idx: 0, drag: 0 });
+  const one = (f, i) => `<div class="pg-s" data-n="${i}">${mimeOf(f).startsWith('image/') ? `<img src="${esc(f.uri)}" alt="" draggable="false">` : `<video src="${esc(f.uri)}${mimeOf(f).startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline></video><span class="fr-k">▶</span>`}</div>`;
+  el.innerHTML = M.map(one).join('') + one(M[0], 0);            // 最後多放一張「第一張」，循環時才接得起來
+  el.addEventListener('ended', e => { if (e.target.tagName === 'VIDEO') pagerEnded(e.target); }, true);
   el.addEventListener('play', e => { const k = e.target.parentNode.querySelector('.fr-k'); if (k) k.hidden = true; }, true);
   el.addEventListener('pause', e => { const k = e.target.parentNode.querySelector('.fr-k'); if (k) k.hidden = false; }, true);
-  if (!reel.raf) reel.raf = requestAnimationFrame(reelTick);
+  pagerSet(0);
 }
-function reelMeasure() {        // 量一組有多寬，不夠鋪滿畫面就多接幾組（才能無縫循環）
-  const el = reel.el, fr = [...el.children].slice(0, reel.n);
-  const loading = fr.some(x => { const im = x.querySelector('img'); return im && !im.complete; });
-  if (loading && performance.now() - reel.born < 3000) return;
-  const w = fr.reduce((a, x) => a + x.offsetWidth, 0); if (w < 20) return;
-  reel.setW = w;
-  const need = Math.max(2, Math.ceil(stageEl.clientWidth * 2 / w) + 1);
-  while (el.children.length < need * reel.n) el.insertAdjacentHTML('beforeend', reel.one);
-  if (!reel.placed) { reel.placed = true; reel.off = fr[0].offsetWidth / 2 - stageEl.clientWidth / 2; }   // 一開始第一格在正中間
+function pagerGo(i, ms, fromAuto) {
+  if (!pagerOn()) return;
+  const prevV = pagerVid();
+  pager.idx = Math.max(0, Math.min(pager.n, i)); pager.drag = 0; pagerSet(ms);
+  const shown = pager.idx % pager.n; stg.idx = shown; stg.key = stg.key.split('|').map((x, k) => k === 3 ? shown : x).join('|');
+  const cnt = stageEl.querySelector('.st-count'); if (cnt) cnt.textContent = `${shown + 1} / ${pager.n}`;
+  if (prevV && prevV !== pagerVid() && !fromAuto) prevV.pause();
+  if (fromAuto && auto.on) { const v = pagerVid(); if (v && v !== prevV) { v._n = 0; pagerPlay(v); } }      // 影片：滑進來就開始播
+  clearTimeout(pager.t);
+  pager.t = setTimeout(() => {
+    if (!pagerOn()) return;
+    if (prevV && prevV !== pagerVid()) prevV.pause();
+    if (pager.idx === pager.n) {                                // 到了尾巴那張「第一張」：瞬間換回真正的第一張
+      const cv = pagerVid(); pager.idx = 0; pagerSet(0); const rv = pagerVid();
+      if (cv && rv) { try { rv.currentTime = cv.currentTime; } catch (e) {} rv._n = cv._n; if (!cv.paused) { const p = rv.play(); if (p && p.catch) p.catch(() => {}); } cv.pause(); }
+    }
+    if (fromAuto && auto.on) autoRun();
+  }, ms + 40);
 }
-function reelPlay(v) { try { v.currentTime = 0; } catch (e) {} const p = v.play(); if (p && p.catch) p.catch(() => { if (reel.hold === v) reel.hold = null; v._st = 'leave'; }); }
-function reelEnded(v) {
-  if (!auto.on) return;
-  if (v._st === 'hold') { if (!v._full) { v._full = true; reelPlay(v); } else { v._st = 'leave'; reel.hold = null; reelPlay(v); } }   // 中間完整播完 → 再播並繼續捲
-  else if (v._st === 'enter' || v._st === 'leave') reelPlay(v);
+function pagerEnded(v) {
+  if (!auto.on || v !== pagerVid()) return;
+  v._n = (v._n || 0) + 1;
+  pagerPlay(v);                                                 // 第 2 次：停在這一頁完整播
+  if (v._n >= 2) pagerGo(pager.idx + 1, 500, true);             // 第 3 次開始播的同時滑到下一張
 }
-function reelShift(dir) {       // 捲過一整組時把位置接回來，並把影片的播放狀態搬到對應的那一格
-  const V = [...reel.el.querySelectorAll('video')], nv = V.length / (reel.el.children.length / reel.n); if (!nv) return;
-  const copies = V.length / nv, mv = (src, dst) => { if (!src) { dst.pause(); dst._st = 'idle'; return; } try { dst.currentTime = src.currentTime; } catch (e) {} dst._st = src._st; dst._full = src._full; if (!src.paused) { const p = dst.play(); if (p && p.catch) p.catch(() => {}); } else dst.pause(); if (reel.hold === src) reel.hold = dst; };
-  if (dir > 0) for (let c = 0; c < copies; c++) for (let k = 0; k < nv; k++) mv(V[(c + 1) * nv + k], V[c * nv + k]);
-  else for (let c = copies - 1; c >= 0; c--) for (let k = 0; k < nv; k++) mv(c > 0 ? V[(c - 1) * nv + k] : null, V[c * nv + k]);
-}
-function reelTick(ts) {
-  const el = reel.el;
-  if (!el || !el.isConnected) { reel.raf = 0; reel.el = null; return; }
-  reel.raf = requestAnimationFrame(reelTick);
-  const dt = Math.min(100, ts - (reel.last || ts)); reel.last = ts;
-  if (ts - reel.mAt > 400) { reel.mAt = ts; reelMeasure(); }
-  if (!reel.setW) return;
-  const moving = auto.on && !reel.hold && !stageG;
-  if (moving) reel.off += REEL_SPEED * dt / 1000;
-  while (reel.off >= reel.setW) { reel.off -= reel.setW; reelShift(1); }
-  while (reel.off < 0) { reel.off += reel.setW; reelShift(-1); }
-  el.style.transform = `translate3d(${-reel.off}px,0,0)`;
-  if (!auto.on && !stageG && ts - reel.cAt < 300) return;
-  const sr = stageEl.getBoundingClientRect(), cx = sr.left + sr.width / 2;
-  if (auto.on) el.querySelectorAll('video').forEach(v => {
-    const r = v.parentNode.getBoundingClientRect(), vis = r.right > sr.left + 8 && r.left < sr.right - 8, c = r.left + r.width / 2;
-    if (!v._st || v._st === 'idle') {
-      if (vis && Math.abs(c - cx) < 3) { v._st = 'hold'; v._full = true; reel.hold = v; reelPlay(v); }          // 一開始就在正中間：直接完整播
-      else if (vis && c > cx) { v._st = 'enter'; v._full = false; reelPlay(v); }                                 // 從右邊進來：開始播
-    } else if (v._st === 'enter') { if (c <= cx) { v._st = 'hold'; reel.hold = v; reel.off -= (cx - c); } }      // 到正中間：停住
-    else if (v._st === 'leave') { if (!vis) { v.pause(); v._st = 'idle'; } }
-  });
-  if (ts - reel.cAt > 300) {     // 右上角顯示現在中間是第幾格
-    reel.cAt = ts; let best = 0, bd = 1e9;
-    [...el.children].forEach(x => { const r = x.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - cx); if (d < bd) { bd = d; best = +x.dataset.n; } });
-    const cnt = stageEl.querySelector('.st-count'); if (cnt) cnt.textContent = `${best + 1} / ${reel.n}`; stg.idx = best; stg.key = stg.key.split('|').map((x, i) => i === 3 ? best : x).join('|');
-  }
-}
+window.addEventListener('resize', () => pagerSet(0));
 function stagePause() { stageEl.querySelectorAll('video').forEach(v => v.pause()); }
 
 // ---- 下載完自動播放
 const auto = { on: false, t: 0, n: 0 };
-function autoStop() { auto.on = false; clearTimeout(auto.t); reel.hold = null; }
+function autoStop() { auto.on = false; clearTimeout(auto.t); }
 function autoBegin(j) {     // 下載完 2 秒後開始
   if (!S.autoPlay) return;
   clearTimeout(auto.t);
@@ -820,7 +805,12 @@ function autoBegin(j) {     // 下載完 2 秒後開始
 }
 function autoRun() {
   if (!auto.on) return; const j = curJob(); if (!j) return; const M = mediaOf(j.files); if (!M.length) { autoStop(); return; }
-  if (stageEl.querySelector('.reel')) return;        // 膠卷自己會捲
+  if (pagerOn()) {                                    // 多張：照片停 1 秒 → 0.5 秒滑到下一張；影片照它自己的節奏
+    const pv2 = pagerVid(); clearTimeout(auto.t);
+    if (!pv2) auto.t = setTimeout(() => { if (auto.on) pagerGo(pager.idx + 1, 500, true); }, 1000);
+    else if (pv2.paused) { pv2._n = 0; pagerPlay(pv2); }
+    return;
+  }
   const v = stageVid(); clearTimeout(auto.t);
   if (v) autoPlayVid(v, M.length > 1);
   else if (M.length > 1) auto.t = setTimeout(() => { if (auto.on) slideTo(stg.idx + 1, 1, true); }, 3200);   // 照片：停一下再滑到下一張
@@ -852,8 +842,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
   el.addEventListener('pointerdown', e => {
     autoStop();                                                             // 手一碰就不再自動播
     if (e.target.closest('.st-ctl')) return;
-    const v = stageVid(), hit = e.target.closest('[data-a]'), fr = e.target.closest('.fr');
-    stageG = { fr, x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: v ? v.currentTime : 0, tgt: v ? v.currentTime : 0, applied: 0, btn: hit ? hit.dataset.a : '' };
+    const v = stageVid(), hit = e.target.closest('[data-a]'), fr = e.target.closest('.pg-s');
+    stageG = { fr, t0: performance.now(), x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: v ? v.currentTime : 0, tgt: v ? v.currentTime : 0, applied: 0, btn: hit ? hit.dataset.a : '' };
     try { el.setPointerCapture(e.pointerId); } catch (x) {}
   });
   el.addEventListener('pointermove', e => {
@@ -861,10 +851,10 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
     const v = stageVid(), dx = e.clientX - g.x0, dy = e.clientY - g.y0, now = performance.now();
     if (!g.mode) {
       if (!(Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2)) return;
-      g.mode = (reel.el && reel.el.isConnected) ? 'pan' : v && v.dataset.s && isFinite(v.duration) ? 'seek' : 'swipe';
+      g.mode = pagerOn() ? 'pan' : v && v.dataset.s && isFinite(v.duration) ? 'seek' : 'swipe';
       g.lx = e.clientX; g.lt = now; if (v) g.base = g.tgt = v.currentTime;
     }
-    if (g.mode === 'pan') { reel.off -= (e.clientX - g.lx); g.lx = e.clientX; return; }                 // 膠卷：跟著手指動
+    if (g.mode === 'pan') { pager.drag = (pager.idx === 0 && dx > 0) ? dx * 0.3 : dx; pagerSet(0); return; }   // 一頁一張：跟著手指動
     if (g.mode === 'seek' && v) {
       const step = e.clientX - g.lx, dt = Math.max(now - g.lt, 1), sp = Math.abs(step) / dt;
       const maxGain = Math.min(4, Math.max(0.06, v.duration / 400)), k = Math.min(1, Math.max(0, (sp - 0.12) / 1.4));
@@ -878,11 +868,15 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
   const end = (e, cancel) => {
     const gg = stageG; stageG = null; if (!gg) return;
     const h = el.querySelector('.st-hint'); if (h) h.hidden = true;
+    if (gg.mode === 'pan') {                                                  // 放手：滑夠遠或滑得快就換一張，不然彈回去
+      const dx = cancel ? 0 : e.clientX - gg.x0, fast = Math.abs(dx) / Math.max(1, performance.now() - gg.t0) > 0.4;
+      const go = (Math.abs(dx) > stageEl.clientWidth * 0.18 || (fast && Math.abs(dx) > 20)) ? (dx < 0 ? 1 : -1) : 0;
+      pagerGo(pager.idx + go, 280, false); return;
+    }
     const j = curJob(); if (cancel || !j) return;
     if (gg.mode === 'seek') { const v = stageVid(); if (v) v.currentTime = gg.tgt; return; }
-    if (gg.mode === 'pan') return;
     if (gg.mode === 'swipe') { if (Math.abs(e.clientX - gg.x0) > 40) stageStep(e.clientX - gg.x0 < 0 ? 1 : -1); return; }
-    if (gg.fr && j.state === 'ok') {                                          // 膠卷上點一格：影片＝播放／暫停，照片＝放大看
+    if (gg.fr && j.state === 'ok') {                                          // 點這一頁：影片＝播放／暫停，照片＝放大看
       const fv = gg.fr.querySelector('video');
       if (fv) { if (fv.paused) { const p = fv.play(); if (p && p.catch) p.catch(() => {}); } else fv.pause(); }
       else playF(j.files, j.title, +gg.fr.dataset.n);
