@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.27';
+const UI_VER = 'YTD_UI_V0.1.28';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.28', ['修正：多張貼文上的「‹ ›」按鈕會變成放大，現在會正確換張']],
   ['YTD_UI_V0.1.27', ['影片直接在下載頁中間那一塊播放，不會放大、也不會跳到另一個播放器', '點畫面＝播放／暫停；播放時左右滑＝快轉（滑越快跳越多、越慢越精準）；下面有進度條', '想放大再按「全螢幕播放」']],
   ['YTD_UI_V0.1.26', ['同一個網址不會重複自動下載：下載過的會問「要再下載一次嗎」，要你按了才會抓', '下載頁改成中間一個大畫面：下載中看進度，下載完直接顯示影片或照片', '多張的貼文可以在大畫面上左右滑，點一下放到全螢幕', '下載頁下面不再列清單，舊的都在「紀錄」', '沒有貼網址時，畫質選項會收起來，讓畫面更大']],
   ['YTD_UI_V0.1.25', ['全自動：打開 App 時剪貼簿有影片網址，就直接用預設畫質下載，不用按任何按鈕（設定可關）', '從其他 App 分享進來也一樣直接下載', '下載頁只留最新完成的那一筆，其他的都收在「紀錄」']],
@@ -715,7 +716,8 @@ function stageStep(d) { const j = curJob(); if (!j) return; const n = mediaOf(j.
   el.addEventListener('pointerdown', e => {
     if (e.target.closest('.st-ctl')) return;
     const v = vid();
-    g = { x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: v ? v.currentTime : 0, tgt: v ? v.currentTime : 0, applied: 0 };
+    const hit = e.target.closest('[data-a]');     // 先記下按到哪個按鈕（之後事件都會算在大畫面上）
+    g = { x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: v ? v.currentTime : 0, tgt: v ? v.currentTime : 0, applied: 0, btn: hit ? hit.dataset.a : '' };
     try { el.setPointerCapture(e.pointerId); } catch (x) {}
   });
   el.addEventListener('pointermove', e => {
@@ -742,9 +744,8 @@ function stageStep(d) { const j = curJob(); if (!j) return; const n = mediaOf(j.
     const j = curJob(); if (cancel || !j) return;
     if (gg.mode === 'seek') { const v = vid(); if (v) v.currentTime = gg.tgt; return; }
     if (gg.mode === 'swipe') { if (Math.abs(e.clientX - gg.x0) > 40) stageStep(e.clientX - gg.x0 < 0 ? 1 : -1); return; }
-    const b = e.target.closest('[data-a]');
-    if (b && b.dataset.a === 'prev') { stageStep(-1); return; }
-    if (b && b.dataset.a === 'next') { stageStep(1); return; }
+    if (gg.btn === 'prev') { stageStep(-1); return; }
+    if (gg.btn === 'next') { stageStep(1); return; }
     if (j.state !== 'ok') return;
     if (vid()) toggle();                                                        // 影片：就在這一塊播
     else if (mediaOf(j.files).length) playF(j.files, j.title, stg.idx);         // 照片：點一下放大看
