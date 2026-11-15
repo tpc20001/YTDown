@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.34';
+const UI_VER = 'YTD_UI_V0.1.35';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.35', ['預設避開 AV1 格式（很多手機解不了，App 內播放器、相簿會播不出來），改抓 VP9／H.264，畫質一樣', '影片在 App 裡播不了時，畫面上會直接出現「用其他 App 播」按鈕（例如 MX Player）']],
   ['YTD_UI_V0.1.34', ['YouTube 多線加速：把影片切成很多小段，同時下載好幾段（預設 8 條，設定裡可調 4～16）', '多線下載失敗時，會自動改回一般方式再試一次']],
   ['YTD_UI_V0.1.33', ['YouTube 下載改成每次只要 10 MB 一段，減少被 YouTube 限速（大檔、4K 越到後面越慢的情況）']],
   ['YTD_UI_V0.1.32', ['Telegram：可以登入你自己的帳號（平台 → Telegram），網頁版拿不到的大影片、相簿也能下載', 'Telegram 沒登入、網頁版又沒提供時，錯誤訊息會直接說明']],
@@ -76,7 +77,7 @@ const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 // ---------- 設定
 const DEF = { quality: 'best', conc: 2, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
   auto: true, autoUpd: true, autoDl: true, autoPlay: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
-  igSlow: true, ttHd: true, ytFast: true, ytConn: 8, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
+  igSlow: true, ttHd: true, ytFast: true, ytConn: 8, noAv1: true, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
 let S = Object.assign({}, DEF, LS('set') || {});
 const saveS = () => LS('set', S);
 const QUALS = [['best', '最好'], ['2160', '4K'], ['1440', '2K'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['audio', 'M4A', '只要聲音'], ['mp3', 'MP3', '只要聲音'], ['thumb', '封面圖', '只抓圖']];
@@ -599,13 +600,20 @@ function tgStartJob(j) {
   N.tgJob(JSON.stringify({ id: j.pid, url: j.url, sub: S.subdir ? 'Telegram' : '', dest: S.dest && S.dest.uri ? S.dest.uri : '', gallery: S.gallery === 'off' ? '' : S.gallery, title: j.title, notify: S.notify }));
 }
 window.onTitle = s2 => { const p = JSON.parse(s2), j = byPid(p.id); if (j && p.title) { j.title = p.title; stg.key = ''; drawStage(); } };
+function modeFor(j) {
+  const q = j.q;
+  if (q === 'thumb') return 'none';
+  if (!S.noAv1 || ['audio', 'mp3'].includes(q)) return q;
+  const h = +q, lim = h ? `[height<=${h}]` : '';
+  return `f:bv*[vcodec!^=av01]${lim}+ba[ext=m4a]/bv*[vcodec!^=av01]${lim}+ba/b[vcodec!^=av01]${lim}/bv*${lim}+ba/b${lim}/bv*+ba/b`;
+}
 function startJob(j) {
   if (j.site === 'Telegram' && has('tgJob') && tgReady() && !j.noTg) { tgStartJob(j); return; }
   if (j.site === 'TikTok' && S.ttHd && has('fetchJob') && has('http') && !j.noHd && !['audio', 'mp3', 'thumb'].includes(j.q) && !j.section && !j.chapters) { ttStart(j); return; }
   if (j.site === 'Instagram' && has('fetchJob') && !j.noApi && !['audio', 'mp3'].includes(j.q)) { igStart(j); return; }
   j.state = 'run'; j.pct = 0; j.stage = '準備中…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = ''; j.sm = null; j.total = 0; j.t0 = Date.now();
   const st = siteOf(j.url);
-  const spec = { id: j.pid, url: j.url, mode: j.q === 'thumb' ? 'none' : j.q, args: argsFor(j), sub: S.subdir ? j.site : '', playlist: j.playlist,
+  const spec = { id: j.pid, url: j.url, mode: modeFor(j), args: argsFor(j), sub: S.subdir ? j.site : '', playlist: j.playlist,
     tpl: (j.playlist ? '%(playlist_index|)s ' : '') + (TPL_STR[S.tpl] || TPL_STR.title), title: j.title, notify: S.notify,
     dest: S.dest && S.dest.uri ? S.dest.uri : '', gallery: S.gallery === 'off' ? '' : S.gallery, cookies: cookieOk(st.ck) ? st.ck : '', aria2: !!(S.aria && !j.section && !j.chapters) };
   drawCard(j); saveQ();
@@ -714,6 +722,7 @@ function drawStage() {
     }
     el.innerHTML = m;
     if (M.length > 1) pagerBuild(j, M); else pager.el = null;
+    { const v0 = stageVid(); if (v0) stageWire(v0); }      // 一顯示就接上，播不了才能馬上提示
     const acts = (j.state === 'run' || j.state === 'wait') ? '<button class="btn ghost" data-a="cancel" type="button">取消</button>'
       : j.state === 'ok' ? '<button class="btn" data-a="open" type="button">全螢幕播放</button><button class="btn ghost" data-a="share" type="button">分享</button><button class="btn ghost" data-a="x" type="button">清掉</button>'
       : `<button class="btn" data-a="retry" type="button">重試</button>${j.state === 'bad' ? '<button class="btn ghost" data-a="detail" type="button">詳細</button>' : ''}<button class="btn ghost" data-a="x" type="button">清掉</button>`;
@@ -745,7 +754,9 @@ function stageWire(v) { // 把影片接上進度條、播放鈕（只對「現�
   v.addEventListener('play', () => { if (!mine()) return; const b = q('.st-play'), c = q('.st-ctl'); if (b) b.hidden = true; if (c) c.hidden = false; call('keepOn', true); });
   v.addEventListener('pause', () => { if (!mine()) return; const b = q('.st-play'); if (b) b.hidden = false; call('keepOn', false); });
   v.addEventListener('ended', () => { if (!mine()) return; const b = q('.st-play'); if (b && !auto.on) b.hidden = false; if (!auto.on) call('keepOn', false); });
-  v.addEventListener('error', () => { if (mine()) toast('這個檔案在這裡播不了，按「全螢幕播放」或用其他 App 開', 4500); });
+  const bad = () => { if (!mine() || q('.st-err')) return; autoStop(); const b = q('.st-play'); if (b) b.hidden = true; stageEl.insertAdjacentHTML('beforeend', '<div class="st-err"><span>這支影片的格式手機內建的播放器解不了</span><button class="btn primary" type="button" data-a="ext">用其他 App 播（例如 MX Player）</button></div>'); };
+  v.addEventListener('error', bad);
+  if (v.error) bad();
 }
 function stageToggle() {
   const v = stageVid(); if (!v) return; stageWire(v);
@@ -914,6 +925,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
       else playF(j.files, j.title, +gg.fr.dataset.n);
       return;
     }
+    if (gg.btn === 'ext') { const f = mediaOf(j.files)[stg.idx] || (j.files || [])[0]; if (f) openF(f); return; }
     if (gg.btn === 'prev') { stageStep(-1); return; }
     if (gg.btn === 'next') { stageStep(1); return; }
     if (j.state !== 'ok') return;
@@ -1119,7 +1131,7 @@ function drawSet() {
   $('#galNote').textContent = verNum(call('shellVer')) < 108 && N ? '要外殼 V0.1.08 以上才有用，請先到「更新」裝新外殼' : (S.dest && S.dest.uri ? '你有自己選存檔資料夾，所以這個設定不會用到' : '會存到相簿的 YTDown' + (S.subdir ? '／平台名稱' : '') + '，其他檔案照舊存到「下載」');
   $('#concV').textContent = S.conc;
   $('#destName').textContent = S.dest && S.dest.uri ? '目前：' + S.dest.name + (has('treeOk') && !N.treeOk(S.dest.uri) ? '（不能用了，請重選）' : '') : '目前：手機的「下載/YTDown」';
-  bindSw('#sSubdir', 'subdir'); bindSw('#sTtHd', 'ttHd'); bindSw('#sYtFast', 'ytFast');
+  bindSw('#sSubdir', 'subdir'); bindSw('#sTtHd', 'ttHd'); bindSw('#sYtFast', 'ytFast'); bindSw('#sNoAv1', 'noAv1');
   chipsInto($('#sYtConn'), [['4', '4 條'], ['8', '8 條'], ['12', '12 條'], ['16', '16 條']], String(S.ytConn || 8), v => { S.ytConn = +v; saveS(); drawSet(); }); bindSw('#sAutoPlay', 'autoPlay', () => { if (!S.autoPlay) autoStop(); }); bindSw('#sPlaylist', 'playlist', () => sel.playlist = S.playlist);
   bindSw('#sSubs', 'subs', () => { sel.subs = S.subs; drawQual(); }); bindSw('#sEmbed', 'embed', () => { sel.embed = S.embed; drawQual(); });
   bindSw('#sSponsor', 'sponsor', () => { sel.sponsor = S.sponsor; drawQual(); });

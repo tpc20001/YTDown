@@ -300,3 +300,5 @@ body.locked{overflow:hidden}
 .pgr{position:absolute;inset:0;display:flex;flex-wrap:nowrap;gap:10px;will-change:transform}
 .pg-s{flex:none;width:100%;height:100%;position:relative;background:#000}
 .pg-s img,.pg-s video{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none;user-select:none}
+.st-err{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;width:min(320px,calc(100% - 40px));background:#15171b;border:1px solid #2a2e35;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;text-align:center;color:#fff;font-size:14px}
+.st-err .btn.primary{background:#4dc9ff;border-color:#4dc9ff;color:#04121b}
