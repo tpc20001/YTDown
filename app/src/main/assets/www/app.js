@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.24';
+const UI_VER = 'YTD_UI_V0.1.25';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.25', ['全自動：打開 App 時剪貼簿有影片網址，就直接用預設畫質下載，不用按任何按鈕（設定可關）', '從其他 App 分享進來也一樣直接下載', '下載頁只留最新完成的那一筆，其他的都收在「紀錄」']],
   ['YTD_UI_V0.1.24', ['TikTok：下載前先找有沒有更高畫質的來源（透過 tikwm.com 查詢），有就用高畫質的，沒有就照原本方式', 'TikTok 的照片輪播貼文也能下載了', '設定裡可以關掉這個功能']],
   ['YTD_UI_V0.1.23', ['照片可以直接存到手機相簿（設定 → 存到相簿：關／只有照片／照片和影片）', '紀錄裡一則貼文有很多張時，全部攤開顯示，點哪張就看哪張', 'IG 帳號瀏覽改得更保守：一次只載入 12 則（跟 IG 網頁一樣），不再先查帳號資料', 'IG 擋住時會顯示 IG 實際回了什麼']],
   ['YTD_V0.1.08（外殼）', ['照片、影片可以存進相簿（DCIM/YTDown）']],
@@ -63,7 +64,7 @@ const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 
 // ---------- 設定
 const DEF = { quality: 'best', conc: 2, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
-  auto: true, autoUpd: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
+  auto: true, autoUpd: true, autoDl: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
   igSlow: true, ttHd: true, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
 let S = Object.assign({}, DEF, LS('set') || {});
 const saveS = () => LS('set', S);
@@ -401,10 +402,18 @@ $('#bGo').onclick = () => {
 // ---- 剪貼簿、分享、捷徑
 let clipU = '';
 function checkClip() {
-  if (!S.clip || !has('paste')) return;
+  if (!has('paste') || (!S.clip && !S.autoDl)) return;
   const L = urlsIn(N.paste()); if (!L.length) return;
   const u = L[0];
   if (u === LS('lastClip') || currentUrls().includes(u) || Q.some(j => j.url === u)) return;
+  // 全自動：認得的影片平台網址、而且沒下載過，就直接開始（帳號頁網址不自動，留給你自己決定）
+  if (S.autoDl && siteOf(u) !== OTHER && !igUserOf(u) && !(LS('hist') || []).some(h => h.u === u && h.ok && !h.gone)) {
+    LS('lastClip', u); $('#clipBar').hidden = true; page('dl');
+    enqueue(u, S.quality, null, { sponsor: S.sponsor });
+    toast('已自動開始下載（' + siteOf(u).k + '）', 3000);
+    return;
+  }
+  if (!S.clip) return;
   clipU = u; $('#clipUrl').textContent = u; $('#clipBar').hidden = false;
 }
 window.onResume = () => { setTimeout(checkClip, 450); refreshEnv(); pump(); autoCheck(false); };
@@ -413,11 +422,11 @@ $('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = tru
 window.onShare = t => {
   page('dl'); const L = urlsIn(t);
   if (!L.length) { toast('分享的內容裡沒有網址'); return; }
-  if (S.shareAuto) { L.forEach(u => enqueue(u, S.quality, null, { sponsor: S.sponsor })); toast(L.length > 1 ? `已開始下載 ${L.length} 個` : '已開始下載'); }
+  if (S.autoDl) { L.forEach(u => enqueue(u, S.quality, null, { sponsor: S.sponsor })); toast(L.length > 1 ? `已開始下載 ${L.length} 個` : '已開始下載'); }
   else addUrls(t);
 };
 window.onShortcut = k => {
-  if (k === 'paste') { page('dl'); const t = call('paste') || ''; if (S.shareAuto && urlsIn(t).length) window.onShare(t); else if (!addUrls(t, true)) toast('剪貼簿裡沒有網址'); }
+  if (k === 'paste') { page('dl'); const t = call('paste') || ''; if (S.autoDl && urlsIn(t).length) window.onShare(t); else if (!addUrls(t, true)) toast('剪貼簿裡沒有網址'); }
   else if (k === 'browse') { page('dl'); $('#bBrowse').click(); }
 };
 
@@ -426,7 +435,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc', 'doneAt'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -571,9 +580,17 @@ window.onDone = s => {
   if (j.state !== 'cancel') saveHist(j);
   if (p.ok && S.vibe) call('vibrate', 60);
   if (j.site === 'Instagram') igPace();
-  drawCard(j); saveQ(); pump();
+  j.doneAt = Date.now();
+  drawCard(j); trimDone(); saveQ(); pump();
 };
 
+// 下載頁只留最新完成的那一筆（其他的都在「紀錄」裡）；正在跑和排隊的照常顯示
+function trimDone() {
+  const F = Q.filter(j => ['ok', 'bad', 'cancel'].includes(j.state)); if (F.length < 2) return;
+  const keep = F.reduce((a, b) => ((b.doneAt || b.t || 0) > (a.doneAt || a.t || 0) ? b : a));
+  F.forEach(j => { if (j === keep) return; const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); const el = document.getElementById(j.id); if (el) el.remove(); });
+  counts();
+}
 function stText(j) {
   if (j.state === 'run') return j.stage || [j.pct ? j.pct.toFixed(1) + '%' : '', j.size, j.speed, j.eta ? '剩 ' + fmtEta(j.eta) : '', j.item ? '第 ' + j.item + ' 個' : ''].filter(Boolean).join(' · ');
   if (j.state === 'wait') { const r = Math.round((igNext - Date.now()) / 1000); return netWait ? '等 Wi-Fi（設定裡開了只用 Wi-Fi）' : (j.site === 'Instagram' && S.igSlow && r > 6) ? `休息中，約 ${r >= 60 ? Math.ceil(r / 60) + ' 分鐘' : r + ' 秒'}後繼續（慢慢抓，避免被 IG 擋）` : '等前面的下載完'; }
@@ -635,6 +652,7 @@ function restore() {
   const missed = jcall('drain') || [];
   Q.forEach(j => { if (j.state === 'run' && !live.has(j.pid) && !missed.some(m => m.fn === 'onDone' && (JSON.parse(m.arg).id === j.pid))) { j.state = 'bad'; j.msg = 'App 被關掉時中斷了，按重試'; } });
   [...Q].reverse().forEach(drawCard);
+  trimDone();
   missed.forEach(m => { try { if (typeof window[m.fn] === 'function') window[m.fn](m.arg); } catch (e) {} });
   saveQ();
 }
@@ -777,7 +795,7 @@ function drawSet() {
   bindSw('#sSubs', 'subs', () => { sel.subs = S.subs; drawQual(); }); bindSw('#sEmbed', 'embed', () => { sel.embed = S.embed; drawQual(); });
   bindSw('#sSponsor', 'sponsor', () => { sel.sponsor = S.sponsor; drawQual(); });
   bindSw('#sWifi', 'wifi', pump); bindSw('#sIgSlow', 'igSlow', () => { igNext = 0; pump(); }); bindSw('#sAria', 'aria');
-  bindSw('#sAuto', 'auto'); bindSw('#sShareAuto', 'shareAuto'); bindSw('#sClip', 'clip'); bindSw('#sCookies', 'cookies');
+  bindSw('#sAuto', 'auto'); bindSw('#sShareAuto', 'autoDl'); bindSw('#sClip', 'clip'); bindSw('#sCookies', 'cookies');
   bindSw('#sNotify', 'notify', () => { if (S.notify) call('askNotify'); }); bindSw('#sVibe', 'vibe'); bindSw('#sAutoCore', 'autoCore');
   bindTxt('#sRate', 'rate'); bindTxt('#sProxy', 'proxy'); bindTxt('#sArgs', 'args');
   $('#sSubLang').value = S.subLang;
