@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import dev.g000sha256.tdl.TdlClient
 import dev.g000sha256.tdl.TdlResult
+import dev.g000sha256.tdl.dto.AuthorizationState
 import dev.g000sha256.tdl.dto.AuthorizationStateClosed
 import dev.g000sha256.tdl.dto.AuthorizationStateClosing
 import dev.g000sha256.tdl.dto.AuthorizationStateLoggingOut
@@ -39,6 +40,7 @@ object Tg {
     @Volatile private var hint = ""
     @Volatile private var me = ""
     @Volatile private var lastErr = ""
+    @Volatile private var paramsSent = false
 
     private fun <T> TdlResult<T>.ok(): T = when (this) {
         is TdlResult.Success -> result
@@ -55,41 +57,51 @@ object Tg {
         if (apiId <= 0 || apiHash.length < 10) { lastErr = "api_id 或 api_hash 不對"; push(); return }
         prefs.edit().putInt("apiId", apiId).putString("apiHash", apiHash).apply()
         if (client != null) { push(); return }
-        lastErr = ""; state = "starting"; push()
+        lastErr = ""; state = "starting"; paramsSent = false; push()
         val c = TdlClient.create(); client = c
         val sc = CoroutineScope(SupervisorJob() + Dispatchers.IO); scope = sc
+        sc.launch(start = CoroutineStart.UNDISPATCHED) { c.authorizationStateUpdates.collect { u -> handle(c, u.authorizationState, apiId, apiHash) } }
+        // TDLib 要先收到一個請求才會開始動，所以主動問一次目前狀態（不問的話會一直卡在「連線中」）
         sc.launch {
-            c.authorizationStateUpdates.collect { u ->
-                when (val a = u.authorizationState) {
-                    is AuthorizationStateWaitTdlibParameters -> {
-                        state = "params"
-                        val base = File(ctx.filesDir, "tdlib")
-                        val r = c.setTdlibParameters(
-                            useTestDc = false,
-                            databaseDirectory = File(base, "db").absolutePath,
-                            filesDirectory = File(base, "files").absolutePath,
-                            databaseEncryptionKey = ByteArray(0),
-                            useFileDatabase = true, useChatInfoDatabase = true, useMessageDatabase = false, useSecretChats = false,
-                            apiId = apiId, apiHash = apiHash,
-                            systemLanguageCode = "zh-hant", deviceModel = Build.MODEL ?: "Android",
-                            systemVersion = "Android " + Build.VERSION.RELEASE, applicationVersion = MainActivity.SHELL,
-                        )
-                        if (r is TdlResult.Failure) { lastErr = "設定失敗：" + r.message; state = "error"; push() }
-                    }
-                    is AuthorizationStateWaitPhoneNumber -> { state = "phone"; hint = ""; push() }
-                    is AuthorizationStateWaitCode -> { state = "code"; hint = a.codeInfo.phoneNumber; push() }
-                    is AuthorizationStateWaitPassword -> { state = "password"; hint = a.passwordHint; push() }
-                    is AuthorizationStateReady -> {
-                        state = "ready"
-                        me = try { val u2 = c.getMe().ok(); listOf(u2.firstName, u2.lastName).filter { it.isNotBlank() }.joinToString(" ").ifEmpty { u2.phoneNumber } } catch (e: Exception) { "" }
-                        push()
-                    }
-                    is AuthorizationStateLoggingOut -> { state = "logout"; push() }
-                    is AuthorizationStateClosed -> { state = "none"; me = ""; client = null; scope?.cancel(); scope = null; push() }
-                    is AuthorizationStateClosing -> {}
-                    else -> { state = "other"; hint = a::class.simpleName ?: ""; push() }    // 例如要註冊新帳號，這個 App 不處理
-                }
+            when (val r = c.getAuthorizationState()) {
+                is TdlResult.Success -> handle(c, r.result, apiId, apiHash)
+                is TdlResult.Failure -> { lastErr = "連不上 Telegram：" + r.message; push() }
             }
+        }
+    }
+
+    private suspend fun handle(c: TdlClient, a: AuthorizationState, apiId: Int, apiHash: String) {
+        when (a) {
+            is AuthorizationStateWaitTdlibParameters -> {
+                if (paramsSent) return
+                paramsSent = true
+                state = "params"
+                val base = File(ctx.filesDir, "tdlib")
+                val r = c.setTdlibParameters(
+                    useTestDc = false,
+                    databaseDirectory = File(base, "db").absolutePath,
+                    filesDirectory = File(base, "files").absolutePath,
+                    databaseEncryptionKey = ByteArray(0),
+                    useFileDatabase = true, useChatInfoDatabase = true, useMessageDatabase = false, useSecretChats = false,
+                    apiId = apiId, apiHash = apiHash,
+                    systemLanguageCode = "zh-hant", deviceModel = Build.MODEL ?: "Android",
+                    systemVersion = "Android " + Build.VERSION.RELEASE, applicationVersion = MainActivity.SHELL,
+                )
+                if (r is TdlResult.Failure) { paramsSent = false; lastErr = humanErr(r.message); state = "error"; push() }
+            }
+            is AuthorizationStateWaitPhoneNumber -> { state = "phone"; hint = ""; push() }
+            is AuthorizationStateWaitCode -> { state = "code"; hint = a.codeInfo.phoneNumber; push() }
+            is AuthorizationStateWaitPassword -> { state = "password"; hint = a.passwordHint; push() }
+            is AuthorizationStateReady -> {
+                if (state == "ready" && me.isNotEmpty()) return
+                state = "ready"
+                me = try { val u2 = c.getMe().ok(); listOf(u2.firstName, u2.lastName).filter { it.isNotBlank() }.joinToString(" ").ifEmpty { u2.phoneNumber } } catch (e: Exception) { "" }
+                push()
+            }
+            is AuthorizationStateLoggingOut -> { state = "logout"; push() }
+            is AuthorizationStateClosed -> { state = "none"; me = ""; client = null; scope?.cancel(); scope = null; push() }
+            is AuthorizationStateClosing -> {}
+            else -> { state = "other"; hint = a::class.simpleName ?: ""; push() }    // 例如要註冊新帳號，這個 App 不處理
         }
     }
     private fun act(block: suspend TdlClient.() -> TdlResult<*>) {

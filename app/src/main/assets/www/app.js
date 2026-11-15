@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.36';
+const UI_VER = 'YTD_UI_V0.1.37';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.10（外殼）／YTD_UI_V0.1.37', ['修正：Telegram 登入一直卡在「連線到 Telegram 中…」']],
   ['YTD_UI_V0.1.36', ['「相容格式優先」：同樣的解析度優先抓 H.264（幾乎所有手機、平板都能播），沒有才依序退到 VP9、最後才是 AV1', '聲音優先抓 AAC（m4a）']],
   ['YTD_UI_V0.1.35', ['預設避開 AV1 格式（很多手機解不了，App 內播放器、相簿會播不出來），改抓 VP9／H.264，畫質一樣', '影片在 App 裡播不了時，畫面上會直接出現「用其他 App 播」按鈕（例如 MX Player）']],
   ['YTD_UI_V0.1.34', ['YouTube 多線加速：把影片切成很多小段，同時下載好幾段（預設 8 條，設定裡可調 4～16）', '多線下載失敗時，會自動改回一般方式再試一次']],
