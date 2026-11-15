@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.23';
+const UI_VER = 'YTD_UI_V0.1.24';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.24', ['TikTok：下載前先找有沒有更高畫質的來源（透過 tikwm.com 查詢），有就用高畫質的，沒有就照原本方式', 'TikTok 的照片輪播貼文也能下載了', '設定裡可以關掉這個功能']],
   ['YTD_UI_V0.1.23', ['照片可以直接存到手機相簿（設定 → 存到相簿：關／只有照片／照片和影片）', '紀錄裡一則貼文有很多張時，全部攤開顯示，點哪張就看哪張', 'IG 帳號瀏覽改得更保守：一次只載入 12 則（跟 IG 網頁一樣），不再先查帳號資料', 'IG 擋住時會顯示 IG 實際回了什麼']],
   ['YTD_V0.1.08（外殼）', ['照片、影片可以存進相簿（DCIM/YTDown）']],
   ['YTD_UI_V0.1.22', ['新增「更新」分頁：檢查更新、更新下載核心、每一版改了什麼，都集中在這裡', '有新版本時，「更新」分頁上會出現「新」的標記']],
@@ -63,7 +64,7 @@ const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 // ---------- 設定
 const DEF = { quality: 'best', conc: 2, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
   auto: true, autoUpd: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
-  igSlow: true, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
+  igSlow: true, ttHd: true, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
 let S = Object.assign({}, DEF, LS('set') || {});
 const saveS = () => LS('set', S);
 const QUALS = [['best', '最好'], ['2160', '4K'], ['1440', '2K'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['audio', 'M4A', '只要聲音'], ['mp3', 'MP3', '只要聲音'], ['thumb', '封面圖', '只抓圖']];
@@ -425,7 +426,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -501,7 +502,34 @@ async function igStart(j) {
     window.onDone(JSON.stringify({ id: j.pid, ok: false, msg: m }));
   }
 }
+// TikTok：TikTok 給網頁的畫質常常只有 576×1024。先問 tikwm.com 有沒有更大的高畫質檔，有才換過去；照片輪播也靠它
+let twNext = 0;
+async function ttStart(j) {
+  j.state = 'run'; j.pct = 0; j.stage = '找高畫質來源…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = ''; j.sm = null; j.total = 0; j.t0 = Date.now(); j.igWait = true;
+  drawCard(j); saveQ();
+  const back = () => { j.igWait = false; j.noHd = true; j.hdSrc = false; startJob(j); };   // 沒有更好的：照原本方式（yt-dlp）
+  try {
+    const wait = twNext - Date.now(); twNext = Math.max(Date.now(), twNext) + 1300; if (wait > 0) await sleep(wait);   // 這個服務一秒只能問一次
+    const r = await httpReq({ url: 'https://www.tikwm.com/api/?hd=1&url=' + encodeURIComponent(j.url) });
+    if (!j.igWait) return;
+    let d = null; try { d = JSON.parse(r.body); } catch (e) {}
+    const x = d && d.code === 0 && d.data;
+    const imgs = x && Array.isArray(x.images) && x.images.length ? x.images : null;
+    const hd = x && x.hdplay && (+x.hd_size > (+x.size || 0) * 1.15);
+    if (!imgs && !hd) { back(); return; }
+    j.igWait = false; j.stage = '';
+    const who = (x.author && x.author.unique_id) || 'tiktok', id = x.id || Date.now();
+    const clean = t => String(t || '').replace(/[\\/:*?"<>|\n\r]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!j.title || /^TikTok video #/.test(j.title)) j.title = clean(x.title) || j.title || `TikTok ${id}`;
+    if (!j.thumb) j.thumb = x.cover || ''; j.uploader = who; j.hdSrc = !imgs; j.res = 0;
+    const items = imgs ? imgs.map((u, i) => ({ url: u, name: `${who} ${id} ${String(i + 1).padStart(2, '0')}.jpg` })) : [{ url: new URL(x.hdplay, 'https://www.tikwm.com').href, name: `${clean(x.title).slice(0, 70) || 'TikTok'} [${id}].mp4` }];
+    const el = document.getElementById(j.id); if (el) el.dataset.st = '';
+    drawCard(j);
+    N.fetchJob(JSON.stringify({ id: j.pid, items, sub: S.subdir ? 'TikTok' : '', dest: S.dest && S.dest.uri ? S.dest.uri : '', gallery: S.gallery === 'off' ? '' : S.gallery, title: j.title, notify: S.notify }));
+  } catch (e) { if (j.igWait) back(); }
+}
 function startJob(j) {
+  if (j.site === 'TikTok' && S.ttHd && has('fetchJob') && has('http') && !j.noHd && !['audio', 'mp3', 'thumb'].includes(j.q) && !j.section && !j.chapters) { ttStart(j); return; }
   if (j.site === 'Instagram' && has('fetchJob') && !j.noApi && !['audio', 'mp3'].includes(j.q)) { igStart(j); return; }
   j.state = 'run'; j.pct = 0; j.stage = '準備中…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = ''; j.sm = null; j.total = 0; j.t0 = Date.now();
   const st = siteOf(j.url);
@@ -532,6 +560,7 @@ window.onProg = s => {
 };
 window.onDone = s => {
   const p = typeof s === 'string' ? JSON.parse(s) : s, j = byPid(p.id); if (!j) return;
+  if (!p.ok && j.hdSrc && !j.stop && p.msg !== '已取消') { j.hdSrc = false; j.noHd = true; startJob(j); return; }   // 高畫質來源抓失敗：改回原本方式
   if (!p.ok && !j.stop && p.msg !== '已取消' && j.k + 1 < triesFor(j.url).length && !/Private|unavailable|removed|Unsupported|No space|login|cookies|資料夾/i.test(p.msg || '')) {
     j.k++; j.stage = `換方式重試（${j.k + 1}/${triesFor(j.url).length}）…`; startJob(j); return;
   }
@@ -558,7 +587,7 @@ function cardHTML(j) {
   if (j.state === 'run' || j.state === 'wait') acts = `<button class="btn ghost" data-a="cancel" type="button">取消</button>`;
   else if (j.state === 'ok') acts = `<button class="btn" data-a="open" type="button">播放</button><button class="btn ghost" data-a="share" type="button">分享</button><button class="btn ghost" data-a="x" type="button">移除</button>`;
   else acts = `<button class="btn" data-a="retry" type="button">重試</button>${j.state === 'bad' ? '<button class="btn ghost" data-a="detail" type="button">詳細</button>' : ''}<button class="btn ghost" data-a="x" type="button">移除</button>`;
-  const tags = [qShow(j.q, j.res), j.playlist ? '清單' : '', j.section ? '片段' : '', j.chapters ? '章節' : '', j.sponsor ? '跳贊助' : ''].filter(Boolean);
+  const tags = [qShow(j.q, j.res), j.playlist ? '清單' : '', j.section ? '片段' : '', j.chapters ? '章節' : '', j.sponsor ? '跳贊助' : '', j.hdSrc ? '高畫質來源' : ''].filter(Boolean);
   return `${thumbImg(j.thumb)}<div class="cb">
     <div class="ct">${esc(j.title || j.url)}</div>
     <div class="cm"><span class="badge">${esc(j.ab)}</span><span class="state ${stateCls}">${stateTxt}</span>${tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>
@@ -585,7 +614,7 @@ function act(j, a) {
   if (a === 'cancel') { j.stop = 1; if (j.state === 'wait' || j.igWait) { j.igWait = false; j.state = 'cancel'; j.msg = '已取消'; drawCard(j); saveQ(); } else call('cancel', j.pid); }
   else if (a === 'open') playF(j.files, j.title);
   else if (a === 'share') shareF(f);
-  else if (a === 'retry') { j.noApi = false; j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
+  else if (a === 'retry') { j.noApi = false; j.noHd = false; j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
   else if (a === 'detail') toast(String(j.raw || j.msg).slice(-300), 7000);
   else if (a === 'x') { const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); const el = document.getElementById(j.id); if (el) el.remove(); counts(); saveQ(); }
 }
@@ -744,7 +773,7 @@ function drawSet() {
   $('#galNote').textContent = verNum(call('shellVer')) < 108 && N ? '要外殼 V0.1.08 以上才有用，請先到「更新」裝新外殼' : (S.dest && S.dest.uri ? '你有自己選存檔資料夾，所以這個設定不會用到' : '會存到相簿的 YTDown' + (S.subdir ? '／平台名稱' : '') + '，其他檔案照舊存到「下載」');
   $('#concV').textContent = S.conc;
   $('#destName').textContent = S.dest && S.dest.uri ? '目前：' + S.dest.name + (has('treeOk') && !N.treeOk(S.dest.uri) ? '（不能用了，請重選）' : '') : '目前：手機的「下載/YTDown」';
-  bindSw('#sSubdir', 'subdir'); bindSw('#sPlaylist', 'playlist', () => sel.playlist = S.playlist);
+  bindSw('#sSubdir', 'subdir'); bindSw('#sTtHd', 'ttHd'); bindSw('#sPlaylist', 'playlist', () => sel.playlist = S.playlist);
   bindSw('#sSubs', 'subs', () => { sel.subs = S.subs; drawQual(); }); bindSw('#sEmbed', 'embed', () => { sel.embed = S.embed; drawQual(); });
   bindSw('#sSponsor', 'sponsor', () => { sel.sponsor = S.sponsor; drawQual(); });
   bindSw('#sWifi', 'wifi', pump); bindSw('#sIgSlow', 'igSlow', () => { igNext = 0; pump(); }); bindSw('#sAria', 'aria');
