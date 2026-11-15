@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.35';
+const UI_VER = 'YTD_UI_V0.1.36';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.36', ['「相容格式優先」：同樣的解析度優先抓 H.264（幾乎所有手機、平板都能播），沒有才依序退到 VP9、最後才是 AV1', '聲音優先抓 AAC（m4a）']],
   ['YTD_UI_V0.1.35', ['預設避開 AV1 格式（很多手機解不了，App 內播放器、相簿會播不出來），改抓 VP9／H.264，畫質一樣', '影片在 App 裡播不了時，畫面上會直接出現「用其他 App 播」按鈕（例如 MX Player）']],
   ['YTD_UI_V0.1.34', ['YouTube 多線加速：把影片切成很多小段，同時下載好幾段（預設 8 條，設定裡可調 4～16）', '多線下載失敗時，會自動改回一般方式再試一次']],
   ['YTD_UI_V0.1.33', ['YouTube 下載改成每次只要 10 MB 一段，減少被 YouTube 限速（大檔、4K 越到後面越慢的情況）']],
@@ -523,6 +524,8 @@ setInterval(() => { if (netWait) pump(); }, 20000);
 
 function argsFor(j) {
   const a = [...(triesFor(j.url)[j.k] || [])];
+  // 同樣的解析度：H.264 > H.265 > VP9 > AV1；聲音 AAC 優先（手機、平板內建播放器最能播）
+  if (S.noAv1 && !['audio', 'mp3', 'thumb'].includes(j.q)) a.push(['-S', (+j.q ? 'res:' + j.q : 'res') + ',+codec:avc:m4a']);
   const yt = siteOf(j.url).k === 'YouTube', viaAria = S.aria && !j.section && !j.chapters;
   if (yt && !viaAria) {
     if (S.ytFast && !j.noFast) {
@@ -604,8 +607,9 @@ function modeFor(j) {
   const q = j.q;
   if (q === 'thumb') return 'none';
   if (!S.noAv1 || ['audio', 'mp3'].includes(q)) return q;
+  // 相容格式優先：格式交給下面 argsFor 的排序（-S）決定，這裡只限制解析度
   const h = +q, lim = h ? `[height<=${h}]` : '';
-  return `f:bv*[vcodec!^=av01]${lim}+ba[ext=m4a]/bv*[vcodec!^=av01]${lim}+ba/b[vcodec!^=av01]${lim}/bv*${lim}+ba/b${lim}/bv*+ba/b`;
+  return `f:bv*${lim}+ba/b${lim}/bv*+ba/b`;
 }
 function startJob(j) {
   if (j.site === 'Telegram' && has('tgJob') && tgReady() && !j.noTg) { tgStartJob(j); return; }
