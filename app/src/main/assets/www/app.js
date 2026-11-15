@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.31';
+const UI_VER = 'YTD_UI_V0.1.32';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,8 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.32', ['Telegram：可以登入你自己的帳號（平台 → Telegram），網頁版拿不到的大影片、相簿也能下載', 'Telegram 沒登入、網頁版又沒提供時，錯誤訊息會直接說明']],
+  ['YTD_V0.1.09（外殼）', ['加入 Telegram 官方的 TDLib，可以用自己的帳號登入下載']],
   ['YTD_UI_V0.1.31', ['多張的貼文改成像 IG 那樣一頁一張：滑一下就換下一張，會自動對齊，張跟張之間留一點空隙', '自動播放：每張照片停 1 秒，用 0.5 秒滑到下一張，最後一張會接回第一張', '影片那一頁：滑進來就開始播，停在這頁完整播一次，再播的時候滑到下一張']],
   ['YTD_UI_V0.1.30', ['多張的貼文改成「膠卷」：所有照片一格接一格並排、中間沒有縫，慢慢往左捲動，一直循環', '膠卷裡的影片：進畫面就開始播，捲到正中間會停住完整播一次，再播的時候繼續往左捲', '可以用手指左右拖動膠卷；點照片放大看，點影片播放／暫停']],
   ['YTD_UI_V0.1.29', ['下載完 2 秒後自動播放：影片連播 3 次', '多張的貼文會自動輪播：照片每張停幾秒，慢慢往左滑到下一張，一直循環', '輪播遇到影片：滑進來時就開始播，停在中間完整播一次，再播的時候滑出去換下一個', '換張有滑動的動畫；碰一下畫面就停止自動播放（設定可關）']],
@@ -51,7 +53,7 @@ const SITES = [
   { k: 'Facebook', ab: 'FB', re: /(^|\.)(facebook\.com|fb\.watch)$/, home: 'https://m.facebook.com', lv: 'y', note: '公開影片、Reels 可以；社團、私人的要用「貼代碼」。', codeOnly: true, ck: 'facebook', login: 'https://m.facebook.com/login', dom: 'facebook.com,www.facebook.com,m.facebook.com' },
   { k: '小紅書', ab: '小紅書', re: /(^|\.)(xiaohongshu\.com|xhslink\.com)$/, home: 'https://www.xiaohongshu.com', lv: 'y', note: '影片筆記可以，時好時壞。', ck: 'xiaohongshu', login: 'https://www.xiaohongshu.com', dom: 'xiaohongshu.com,www.xiaohongshu.com' },
   { k: '微博', ab: '微博', re: /(^|\.)(weibo\.com|weibo\.cn)$/, home: 'https://m.weibo.cn', lv: 'y', note: '部分影片要登入。', ck: 'weibo', login: 'https://passport.weibo.com/sso/signin', dom: 'weibo.com,www.weibo.com,m.weibo.cn,weibo.cn,passport.weibo.com' },
-  { k: 'Telegram', ab: 'TG', re: /(^|\.)(t\.me|telegram\.me)$/, home: 'https://t.me', lv: 'y', note: '公開頻道的貼文連結可以（t.me/頻道名/編號）；私人群組和聊天室不行。' },
+  { k: 'Telegram', ab: 'TG', re: /(^|\.)(t\.me|telegram\.me)$/, home: 'https://t.me', lv: 'y', tg: true, note: '沒登入：只能抓網頁版有提供的（小影片）。登入自己的帳號後，大影片、相簿、你加入的私人頻道都能下載。' },
   { k: 'Vimeo', ab: 'VM', re: /(^|\.)vimeo\.com$/, home: 'https://vimeo.com', lv: 'g', note: '公開影片可以。' },
   { k: 'Twitch', ab: 'TW', re: /(^|\.)twitch\.tv$/, home: 'https://m.twitch.tv', lv: 'g', note: '精華片段、VOD 可以；直播會錄到你取消為止。' },
   { k: 'Reddit', ab: 'RD', re: /(^|\.)(reddit\.com|redd\.it)$/, home: 'https://www.reddit.com', lv: 'g', note: '貼文裡的影片可以。' },
@@ -167,6 +169,12 @@ function friendly(m, site) {
   if (/IG_RATE/.test(m)) return 'IG 暫時擋住了（太頻繁），等 10 分鐘以上再試。' + (igDet ? `（IG 回應 ${igDet}）` : '');
   if (/IG_LOGIN/.test(m)) return 'IG 不認這組登入資料。到「平台」→ Instagram：按「重貼」貼新的 sessionid；或按「登出」後用「App 內登入」。' + (igDet ? `（IG 回應 ${igDet}）` : '');
 
+  if (/TG_LOGIN/.test(m)) return 'Telegram 還沒登入，到「平台」→ Telegram 登入你的帳號。';
+  if (/TG_NOMSG/.test(m)) return 'Telegram 找不到這則訊息（可能被刪了，或是私人頻道你沒有加入）。';
+  if (/TG_NOMEDIA/.test(m)) return '這則 Telegram 訊息裡沒有影片或照片。';
+  if (/TG_NODL/.test(m)) return '這個頻道不允許下載（頻道開了內容保護）。';
+  if (/TG_ERR/.test(m)) return 'Telegram 回報錯誤：' + m.replace(/^.*TG_ERR\s*/, '').slice(0, 120);
+  if (site === 'Telegram' && /沒有產生檔案|No video formats|Unsupported URL|No media/i.test(m)) return has('tgJob') ? '這支影片太大，Telegram 網頁版沒有提供。到「平台」→ Telegram 登入你的帳號，就能下載。' : '這支影片太大，Telegram 網頁版沒有提供。要更新外殼到 V0.1.09 以上，登入 Telegram 帳號才能下載。';
   if (/IG_SHELL/.test(m)) return 'IG 的照片和帳號瀏覽要外殼 YTD_V0.1.07 以上，請先更新外殼。';
   if (/IG_URL/.test(m)) return '看不懂這個 IG 網址。請用貼文、Reels、限時動態或個人頁的連結。';
   if (/IG_NOUSER/.test(m)) return '找不到這個 IG 帳號，確認帳號名稱有沒有打對。';
@@ -570,7 +578,15 @@ async function ttStart(j) {
     N.fetchJob(JSON.stringify({ id: j.pid, items, sub: S.subdir ? 'TikTok' : '', dest: S.dest && S.dest.uri ? S.dest.uri : '', gallery: S.gallery === 'off' ? '' : S.gallery, title: j.title, notify: S.notify }));
   } catch (e) { if (j.igWait) back(); }
 }
+const tgReady = () => { const t = jcall('tgInfo'); return !!(t && t.state === 'ready'); };
+function tgStartJob(j) {
+  j.state = 'run'; j.pct = 0; j.stage = '向 Telegram 要檔案…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = ''; j.sm = null; j.total = 0; j.t0 = Date.now(); j.viaTg = true;
+  drawCard(j); saveQ();
+  N.tgJob(JSON.stringify({ id: j.pid, url: j.url, sub: S.subdir ? 'Telegram' : '', dest: S.dest && S.dest.uri ? S.dest.uri : '', gallery: S.gallery === 'off' ? '' : S.gallery, title: j.title, notify: S.notify }));
+}
+window.onTitle = s2 => { const p = JSON.parse(s2), j = byPid(p.id); if (j && p.title) { j.title = p.title; stg.key = ''; drawStage(); } };
 function startJob(j) {
+  if (j.site === 'Telegram' && has('tgJob') && tgReady() && !j.noTg) { tgStartJob(j); return; }
   if (j.site === 'TikTok' && S.ttHd && has('fetchJob') && has('http') && !j.noHd && !['audio', 'mp3', 'thumb'].includes(j.q) && !j.section && !j.chapters) { ttStart(j); return; }
   if (j.site === 'Instagram' && has('fetchJob') && !j.noApi && !['audio', 'mp3'].includes(j.q)) { igStart(j); return; }
   j.state = 'run'; j.pct = 0; j.stage = '準備中…'; j.pid = j.id + '~' + j.k; j.size = j.speed = j.eta = j.item = ''; j.sm = null; j.total = 0; j.t0 = Date.now();
@@ -594,8 +610,9 @@ window.onProg = s => {
   if ((m = line.match(/of\s+~?\s*([\d.]+\s*[KMG]i?B)/)) || (m = line.match(/\/([\d.]+\s*[KMG]i?B)\(/))) { j.size = m[1].replace('i', ''); j.total = toBytes(m[1]); }
   if ((m = line.match(/at\s+([\d.]+\s*[KMG]?i?B)\/s/)) || (m = line.match(/DL:([\d.]+\s*[KMG]?i?B)/))) inst = toBytes(m[1]);
   if ((m = line.match(/Downloading item (\d+) of (\d+)/)) || (m = line.match(/\[fetch\] (\d+)\/(\d+)/))) j.item = m[2] > 1 ? m[1] + '/' + m[2] : '';
+  if ((m = line.match(/^\[tg\] (\d+)\/(\d+) (\d+) (\d+)/))) { j.item = +m[2] > 1 ? m[1] + '/' + m[2] : ''; j.total = +m[4]; j.size = fmtSize(+m[4]); }
   if (p.pct > 0 || inst > 0) smooth(j, p.pct > 0 ? p.pct : 0, inst, p.eta);
-  j.stage = /\[Merger\]|Merging/.test(line) ? '合併影像和聲音…' : /ExtractAudio/.test(line) ? '轉成 MP3…' : /SponsorBlock|ModifyChapters/.test(line) ? '剪掉贊助片段…' : /SplitChapters/.test(line) ? '依章節切檔…' : /EmbedThumbnail|EmbedSubtitle|Metadata/.test(line) ? '寫入封面和資訊…' : /\[download\]|DL:|\[fetch\]/.test(line) ? '' : (p.pct > 0 ? '' : '連線中…');
+  j.stage = /\[Merger\]|Merging/.test(line) ? '合併影像和聲音…' : /ExtractAudio/.test(line) ? '轉成 MP3…' : /SponsorBlock|ModifyChapters/.test(line) ? '剪掉贊助片段…' : /SplitChapters/.test(line) ? '依章節切檔…' : /EmbedThumbnail|EmbedSubtitle|Metadata/.test(line) ? '寫入封面和資訊…' : /\[download\]|DL:|\[fetch\]|^\[tg\]/.test(line) ? '' : (p.pct > 0 ? '' : '連線中…');
   if (!j.title) { const t = line.match(/Destination: (?:.*\/)?(.+?)\.[a-z0-9]+$/i); if (t) j.title = t[1].replace(/\s\[[\w-]{6,}\]$/, ''); }
   drawCard(j);
   if (Date.now() - fgLast > 2000) { fgLast = Date.now(); const r = Q.filter(x => x.state === 'run'); call('fgText', r.map(x => `${(x.title || x.site).slice(0, 18)} ${x.pct ? Math.round(x.pct) + '%' : ''}`).join('、')); }
@@ -900,7 +917,7 @@ function act(j, a) {
   if (a === 'cancel') { j.stop = 1; if (j.state === 'wait' || j.igWait) { j.igWait = false; j.state = 'cancel'; j.msg = '已取消'; drawCard(j); saveQ(); } else call('cancel', j.pid); }
   else if (a === 'open') playF(j.files, j.title, j.id === stg.id ? stg.idx : 0);
   else if (a === 'share') shareF(f);
-  else if (a === 'retry') { j.noApi = false; j.noHd = false; j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
+  else if (a === 'retry') { j.noApi = false; j.noHd = false; j.noTg = false; j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
   else if (a === 'detail') toast(String(j.raw || j.msg).slice(-300), 7000);
   else if (a === 'x') { const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); drawStage(); counts(); saveQ(); }
 }
@@ -930,6 +947,23 @@ function restore() {
 // 紀錄
 // =====================================================================
 let codeFor = -1;
+// ---- Telegram 登入（用你自己在 my.telegram.org 申請的 api_id／api_hash）
+let tgS = jcall('tgInfo') || { state: 'none' }, tgOpen = false, tgBusy = false;
+window.onTg = s2 => { tgS = JSON.parse(s2); tgBusy = false; if (tgS.state === 'ready') { tgOpen = false; toast('Telegram 已登入' + (tgS.me ? '：' + tgS.me : '')); } if ($('#p_sites').classList.contains('on')) drawSites(); };
+function tgBox() {
+  const st = tgS.state, err = tgS.err ? `<div class="pv-err">${esc(tgS.err)}</div>` : '';
+  let b = '';
+  if (st === 'none' || st === 'error' || !tgS.hasKey) b = `<span class="mut small">第一次要先拿你自己的 api_id 和 api_hash（只要做一次）：<br>1. 用瀏覽器打開 <b>my.telegram.org</b>，用手機號碼登入（驗證碼會傳到你的 Telegram App）。<br>2. 點「API development tools」，App title 和 Short name 隨便填（例如 YTDown），平台選 Android，按 Create。<br>3. 把頁面上的 <b>App api_id</b>（數字）和 <b>App api_hash</b>（一長串英數）貼到下面。</span>
+      <input id="tgId" type="text" inputmode="numeric" placeholder="api_id（數字）" autocomplete="off"><input id="tgHash" type="text" placeholder="api_hash" autocomplete="off" spellcheck="false">
+      <div class="row"><button class="btn sm primary" data-a="tgGo" type="button">下一步</button><button class="link" data-a="tgSite" type="button">打開 my.telegram.org</button></div>`;
+  else if (st === 'starting' || st === 'params') b = '<span class="mut small">連線到 Telegram 中…</span>';
+  else if (st === 'phone') b = `<span class="mut small">輸入你的 Telegram 手機號碼，要加國碼（台灣是 +886，去掉開頭的 0）。</span><input id="tgIn" type="tel" placeholder="+886912345678" autocomplete="off"><div class="row"><button class="btn sm primary" data-a="tgPhone" type="button">傳驗證碼</button></div>`;
+  else if (st === 'code') b = `<span class="mut small">驗證碼已經傳到你的 Telegram App（${esc(tgS.hint)}），不是簡訊。</span><input id="tgIn" type="text" inputmode="numeric" placeholder="驗證碼" autocomplete="one-time-code"><div class="row"><button class="btn sm primary" data-a="tgCode" type="button">登入</button></div>`;
+  else if (st === 'password') b = `<span class="mut small">你的帳號有設兩步驟驗證，輸入那組密碼${tgS.hint ? '（提示：' + esc(tgS.hint) + '）' : ''}。</span><input id="tgIn" type="password" placeholder="兩步驟驗證密碼" autocomplete="off"><div class="row"><button class="btn sm primary" data-a="tgPw" type="button">登入</button></div>`;
+  else if (st === 'other') b = '<span class="mut small">這個號碼還沒有 Telegram 帳號，請先用 Telegram App 註冊。</span>';
+  else b = `<span class="mut small">處理中…</span>`;
+  return `<div class="codebox">${b}${err}<div class="row"><span class="grow"></span>${st !== 'none' ? '<button class="link" data-a="tgReset" type="button">重新開始</button>' : ''}<button class="link" data-a="tgClose" type="button">收起來</button></div></div>`;
+}
 let hFilter = '全部', hAsk = -1, hShow = 100;
 const szOf = h => (h.files || []).reduce((a, x) => a + (+x.size || 0), 0);
 const mediaOf = files => (files || []).filter(f => f && f.uri && /^(video|audio|image)\//.test(mimeOf(f)));
@@ -998,7 +1032,8 @@ function drawSites() {
     return `<div class="site" data-i="${i}"><span class="badge">${esc(s.ab)}</span>
       <span class="site-b" data-a="home"><span class="site-n">${esc(s.k)}</span> <span class="lv ${s.lv}">${s.lv === 'g' ? '穩定' : '有時失敗'}</span>
       ${logged ? `<span class="ok-t"> · 已登入 ${fmtTime(c.time)}</span>` : ''}<span class="site-d" style="display:block">${esc(s.note)}</span></span>
-      <span class="site-acts">${s.ck && canLogin ? (logged ? '<button class="btn sm ghost" data-a="code" type="button">重貼</button><button class="btn sm ghost" data-a="logout" type="button">登出</button>' : (s.codeOnly ? '<button class="btn sm" data-a="code" type="button">貼代碼</button><button class="btn sm ghost" data-a="login" type="button">App 內登入</button>' : '<button class="btn sm" data-a="login" type="button">登入</button><button class="btn sm ghost" data-a="code" type="button">貼代碼</button>')) : ''}</span></div>
+      <span class="site-acts">${s.tg && has('tgInfo') ? (tgS.state === 'ready' ? '<button class="btn sm ghost" data-a="tgOut" type="button">登出</button>' : '<button class="btn sm" data-a="tgOpen" type="button">登入</button>') : ''}${s.ck && canLogin ? (logged ? '<button class="btn sm ghost" data-a="code" type="button">重貼</button><button class="btn sm ghost" data-a="logout" type="button">登出</button>' : (s.codeOnly ? '<button class="btn sm" data-a="code" type="button">貼代碼</button><button class="btn sm ghost" data-a="login" type="button">App 內登入</button>' : '<button class="btn sm" data-a="login" type="button">登入</button><button class="btn sm ghost" data-a="code" type="button">貼代碼</button>')) : ''}</span></div>
+      ${s.tg && tgOpen && has('tgInfo') && tgS.state !== 'ready' ? tgBox() : ''}${s.tg && tgS.state === 'ready' ? `<div class="mut small" style="padding:0 4px">已登入 Telegram${tgS.me ? '：' + esc(tgS.me) : ''}</div>` : ''}
       ${codeFor === i ? `<div class="codebox" data-i="${i}"><span class="mut small">${CK_CODE[s.ck] ? `電腦瀏覽器登入 ${esc(s.k)} → 按 F12 → Application（應用程式）→ 左邊 Cookies → 找到 <b>${CK_CODE[s.ck]}</b>，複製它的 Value 貼到這裡。也可以貼整串「名稱=值; 名稱=值」。` : `電腦瀏覽器登入 ${esc(s.k)} → 按 F12 → Network → 點任一個請求 → 把 Cookie 那一整串貼到這裡（名稱=值; 名稱=值）。`}</span>
         <input id="codeIn" type="text" autocomplete="off" spellcheck="false" placeholder="${CK_CODE[s.ck] ? '貼上 ' + CK_CODE[s.ck] + ' 的值' : '貼上整串 Cookie'}">
         <div class="row"><button class="btn sm primary" data-a="codeSave" type="button">儲存</button><button class="btn sm ghost" data-a="codeNo" type="button">取消</button></div></div>` : ''}`;
@@ -1007,6 +1042,15 @@ function drawSites() {
 }
 $('#sites').onclick = e => {
   const b = e.target.closest('[data-a]'); if (!b) return;
+  const tv = id => (($('#' + id) || {}).value || '').trim();
+  if (b.dataset.a === 'tgOpen') { tgOpen = true; drawSites(); return; }
+  if (b.dataset.a === 'tgClose') { tgOpen = false; drawSites(); return; }
+  if (b.dataset.a === 'tgSite') { call('openUrl', 'https://my.telegram.org/apps'); return; }
+  if (b.dataset.a === 'tgGo') { const id = tv('tgId'), h = tv('tgHash'); if (!/^\d{3,}$/.test(id) || h.length < 20) { toast('api_id 是一串數字，api_hash 是 32 個英數字，請再確認'); return; } N.tgStart(id, h); return; }
+  if (b.dataset.a === 'tgPhone') { const v = tv('tgIn').replace(/[\s-]/g, ''); if (!/^\+\d{8,15}$/.test(v)) { toast('號碼要加國碼，例如 +886912345678'); return; } N.tgPhone(v); toast('驗證碼傳送中…'); return; }
+  if (b.dataset.a === 'tgCode') { const v = tv('tgIn'); if (!v) return; N.tgCode(v); return; }
+  if (b.dataset.a === 'tgPw') { const v = tv('tgIn'); if (!v) return; N.tgPassword(v); return; }
+  if (b.dataset.a === 'tgReset' || b.dataset.a === 'tgOut') { N.tgLogout(); tgS = { state: 'none' }; drawSites(); toast(b.dataset.a === 'tgOut' ? 'Telegram 已登出' : '已重新開始'); return; }
   const s = SITES[+b.closest('[data-i]').dataset.i];
   if (b.dataset.a === 'code') { codeFor = SITES.indexOf(s); drawSites(); const el = $('#codeIn'); if (el) el.focus(); return; }
   if (b.dataset.a === 'codeNo') { codeFor = -1; drawSites(); return; }
