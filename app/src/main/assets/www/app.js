@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.32';
+const UI_VER = 'YTD_UI_V0.1.33';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.33', ['YouTube 下載改成每次只要 10 MB 一段，減少被 YouTube 限速（大檔、4K 越到後面越慢的情況）']],
   ['YTD_UI_V0.1.32', ['Telegram：可以登入你自己的帳號（平台 → Telegram），網頁版拿不到的大影片、相簿也能下載', 'Telegram 沒登入、網頁版又沒提供時，錯誤訊息會直接說明']],
   ['YTD_V0.1.09（外殼）', ['加入 Telegram 官方的 TDLib，可以用自己的帳號登入下載']],
   ['YTD_UI_V0.1.31', ['多張的貼文改成像 IG 那樣一頁一張：滑一下就換下一張，會自動對齊，張跟張之間留一點空隙', '自動播放：每張照片停 1 秒，用 0.5 秒滑到下一張，最後一張會接回第一張', '影片那一頁：滑進來就開始播，停在這頁完整播一次，再播的時候滑到下一張']],
@@ -67,6 +68,7 @@ const SEARCHERS = SITES.filter(s => s.search);
 
 // YouTube 失敗時依序換的方式（之後 YouTube 改規則，熱更新換這張表就好）
 const YT_EJS = ['--remote-components', 'ejs:github'];
+const YT_CHUNK = ['--http-chunk-size', '10M'];     // 分段要檔案：YouTube 對一次要整個大檔會限速
 const YT_TRIES = [[YT_EJS], [YT_EJS, ['--extractor-args', 'youtube:player_client=tv_simply']], [YT_EJS, ['--extractor-args', 'youtube:player_client=android_vr']], [YT_EJS, ['--extractor-args', 'youtube:player_client=web_safari']], [YT_EJS, ['--extractor-args', 'youtube:player_client=mweb']]];
 const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 
@@ -519,6 +521,7 @@ setInterval(() => { if (netWait) pump(); }, 20000);
 
 function argsFor(j) {
   const a = [...(triesFor(j.url)[j.k] || [])];
+  if (siteOf(j.url).k === 'YouTube' && !(S.aria && !j.section && !j.chapters)) a.push(YT_CHUNK);   // 開了 aria2 就交給它多線下載
   if (j.q === 'thumb') { a.push(['--skip-download'], ['--write-thumbnail'], ['--convert-thumbnails', 'jpg']); return a.concat(globalArgs()); }
   if (j.subs) { a.push(['--write-subs'], ['--sub-langs', S.subLang || 'zh.*,en'], ['--convert-subs', 'srt']); if (j.embed) a.push(['--embed-subs']); }
   if (j.embed) a.push(['--embed-thumbnail'], ['--embed-metadata']);
