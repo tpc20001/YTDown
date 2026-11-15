@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.25';
+const UI_VER = 'YTD_UI_V0.1.26';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.26', ['同一個網址不會重複自動下載：下載過的會問「要再下載一次嗎」，要你按了才會抓', '下載頁改成中間一個大畫面：下載中看進度，下載完直接顯示影片或照片', '多張的貼文可以在大畫面上左右滑，點一下放到全螢幕', '下載頁下面不再列清單，舊的都在「紀錄」', '沒有貼網址時，畫質選項會收起來，讓畫面更大']],
   ['YTD_UI_V0.1.25', ['全自動：打開 App 時剪貼簿有影片網址，就直接用預設畫質下載，不用按任何按鈕（設定可關）', '從其他 App 分享進來也一樣直接下載', '下載頁只留最新完成的那一筆，其他的都收在「紀錄」']],
   ['YTD_UI_V0.1.24', ['TikTok：下載前先找有沒有更高畫質的來源（透過 tikwm.com 查詢），有就用高畫質的，沒有就照原本方式', 'TikTok 的照片輪播貼文也能下載了', '設定裡可以關掉這個功能']],
   ['YTD_UI_V0.1.23', ['照片可以直接存到手機相簿（設定 → 存到相簿：關／只有照片／照片和影片）', '紀錄裡一則貼文有很多張時，全部攤開顯示，點哪張就看哪張', 'IG 帳號瀏覽改得更保守：一次只載入 12 則（跟 IG 網頁一樣），不再先查帳號資料', 'IG 擋住時會顯示 IG 實際回了什麼']],
@@ -236,7 +237,7 @@ function onInput() {
   const L = currentUrls(), text = urlBox.value.trim();
   const searching = !L.length && text.length > 1;
   $('#searchBox').hidden = !searching;
-  $('#dlOpts').hidden = searching;
+  $('#dlOpts').hidden = searching || !L.length;
   if (searching) { $('#siteTag').textContent = ''; $('#preview').hidden = true; drawSrc(); return; }
   $('#results').innerHTML = '';
   $('#siteTag').textContent = L.length === 1 ? siteOf(L[0]).k : L.length > 1 ? L.length + ' 個網址' : '';
@@ -401,29 +402,55 @@ $('#bGo').onclick = () => {
 
 // ---- 剪貼簿、分享、捷徑
 let clipU = '';
+// 同一支影片的不同寫法（多了 ?si=、?igsh= 之類的尾巴）要當成同一個
+function urlKey(u) {
+  try {
+    const x = new URL(u), h = x.hostname.replace(/^(www|m)\./, ''); let m;
+    if (/youtu\.be$/.test(h)) return 'yt:' + x.pathname.slice(1).split('/')[0];
+    if (/youtube\.com$/.test(h)) { const v = x.searchParams.get('v'); if (v) return 'yt:' + v; m = x.pathname.match(/\/(shorts|live|embed)\/([\w-]+)/); if (m) return 'yt:' + m[2]; }
+    const ig = igCode(u); if (ig) return 'ig:' + ig.code;
+    m = x.pathname.match(/\/video\/(\d+)/); if (/tiktok\.com$/.test(h) && m) return 'tt:' + m[1];
+    ['si', 'igsh', 'igshid', 'img_index', 'cplk', 'utm_source', 'utm_medium', 'utm_campaign', 'feature', 'share_id', '_r', '_t', 'spm_id_from', 'vd_source'].forEach(k => x.searchParams.delete(k));
+    return h + x.pathname.replace(/\/$/, '') + x.search;
+  } catch (e) { return String(u); }
+}
+// 這個網址是不是抓過了：'busy'＝正在抓或排隊中，'had'＝下載過，''＝沒有
+function seenUrl(u) {
+  const k = urlKey(u);
+  if (Q.some(j => (j.state === 'run' || j.state === 'wait') && urlKey(j.url) === k)) return 'busy';
+  if (Q.some(j => j.state === 'ok' && urlKey(j.url) === k) || (LS('hist') || []).some(h => h.ok && urlKey(h.u) === k)) return 'had';
+  return '';
+}
+let clipDup = false;
+function askClip(u, dup) {
+  clipU = u; clipDup = dup;
+  $('#clipLbl').textContent = dup ? '這個下載過了，要再下載一次嗎？' : '剪貼簿有網址';
+  $('#clipAdd').textContent = dup ? '再下載' : '加入'; $('#clipNo').textContent = dup ? '不用' : '忽略';
+  $('#clipUrl').textContent = u; $('#clipBar').hidden = false;
+}
+function autoGo(u) { LS('lastClip', u); $('#clipBar').hidden = true; page('dl'); enqueue(u, S.quality, null, { sponsor: S.sponsor }); }
 function checkClip() {
   if (!has('paste') || (!S.clip && !S.autoDl)) return;
   const L = urlsIn(N.paste()); if (!L.length) return;
   const u = L[0];
-  if (u === LS('lastClip') || currentUrls().includes(u) || Q.some(j => j.url === u)) return;
-  // 全自動：認得的影片平台網址、而且沒下載過，就直接開始（帳號頁網址不自動，留給你自己決定）
-  if (S.autoDl && siteOf(u) !== OTHER && !igUserOf(u) && !(LS('hist') || []).some(h => h.u === u && h.ok && !h.gone)) {
-    LS('lastClip', u); $('#clipBar').hidden = true; page('dl');
-    enqueue(u, S.quality, null, { sponsor: S.sponsor });
-    toast('已自動開始下載（' + siteOf(u).k + '）', 3000);
-    return;
-  }
-  if (!S.clip) return;
-  clipU = u; $('#clipUrl').textContent = u; $('#clipBar').hidden = false;
+  if (u === LS('lastClip') || currentUrls().includes(u)) return;          // 同一份剪貼簿內容：不重複處理、也不一直問
+  const seen = seenUrl(u);
+  if (seen === 'busy') return;
+  if (seen === 'had') { askClip(u, true); return; }                         // 下載過：要你按了才會再抓
+  if (S.autoDl && siteOf(u) !== OTHER && !igUserOf(u)) { autoGo(u); toast('已自動開始下載（' + siteOf(u).k + '）', 3000); return; }
+  if (S.clip) askClip(u, false);
 }
 window.onResume = () => { setTimeout(checkClip, 450); refreshEnv(); pump(); autoCheck(false); };
-$('#clipAdd').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
+$('#clipAdd').onclick = () => { if (clipDup) { autoGo(clipU); toast('再下載一次'); return; } LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
 $('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; };
 window.onShare = t => {
   page('dl'); const L = urlsIn(t);
   if (!L.length) { toast('分享的內容裡沒有網址'); return; }
-  if (S.autoDl) { L.forEach(u => enqueue(u, S.quality, null, { sponsor: S.sponsor })); toast(L.length > 1 ? `已開始下載 ${L.length} 個` : '已開始下載'); }
-  else addUrls(t);
+  if (!S.autoDl) { addUrls(t); return; }
+  const fresh = L.filter(u => !seenUrl(u)), dup = L.find(u => seenUrl(u) === 'had');
+  fresh.forEach(u => { LS('lastClip', u); enqueue(u, S.quality, null, { sponsor: S.sponsor }); });
+  if (fresh.length) toast(fresh.length > 1 ? `已開始下載 ${fresh.length} 個` : '已開始下載');
+  else if (dup) askClip(dup, true);
 };
 window.onShortcut = k => {
   if (k === 'paste') { page('dl'); const t = call('paste') || ''; if (S.autoDl && urlsIn(t).length) window.onShare(t); else if (!addUrls(t, true)) toast('剪貼簿裡沒有網址'); }
@@ -588,8 +615,8 @@ window.onDone = s => {
 function trimDone() {
   const F = Q.filter(j => ['ok', 'bad', 'cancel'].includes(j.state)); if (F.length < 2) return;
   const keep = F.reduce((a, b) => ((b.doneAt || b.t || 0) > (a.doneAt || a.t || 0) ? b : a));
-  F.forEach(j => { if (j === keep) return; const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); const el = document.getElementById(j.id); if (el) el.remove(); });
-  counts();
+  F.forEach(j => { if (j === keep) return; const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); });
+  drawStage(); counts();
 }
 function stText(j) {
   if (j.state === 'run') return j.stage || [j.pct ? j.pct.toFixed(1) + '%' : '', j.size, j.speed, j.eta ? '剩 ' + fmtEta(j.eta) : '', j.item ? '第 ' + j.item + ' 個' : ''].filter(Boolean).join(' · ');
@@ -612,28 +639,83 @@ function cardHTML(j) {
     <div class="st">${esc(stText(j))}</div>
     <div class="acts">${acts}</div></div>`;
 }
-function drawCard(j) {
-  let el = document.getElementById(j.id);
-  if (!el) { el = document.createElement('div'); el.id = j.id; $('#queue').prepend(el); el.onclick = e => { const b = e.target.closest('[data-a]'); if (b) act(j, b.dataset.a); }; }
-  el.className = 'card ' + ({ ok: 'ok', bad: 'bad', cancel: 'bad', wait: 'wait' }[j.state] || '');
-  if (j.state === 'run' && el.dataset.st === 'run') {   // 進度更新只換會變的地方，縮圖不閃
-    el.querySelector('.bar i').style.width = Math.max(2, j.pct || 0) + '%';
-    el.querySelector('.st').textContent = stText(j);
-    const ct = el.querySelector('.ct'); if (j.title && ct.textContent !== j.title) ct.textContent = j.title;
-  } else el.innerHTML = cardHTML(j);
-  el.dataset.st = j.state;
-  counts();
+function drawCard(j) { drawStage(); counts(); }
+
+// =====================================================================
+// 大畫面：下載頁中間只顯示「目前這一個」
+// 正在下載的優先；沒有就顯示最新完成的。完成後直接看，多張可以左右滑
+// =====================================================================
+const stg = { id: '', key: '', idx: 0 };
+function curJob() {
+  const R = Q.filter(j => j.state === 'run'); if (R.length) return R.reduce((a, b) => ((b.t0 || 0) > (a.t0 || 0) ? b : a));
+  const F = Q.filter(j => ['ok', 'bad', 'cancel'].includes(j.state)); if (F.length) return F.reduce((a, b) => ((b.doneAt || b.t || 0) > (a.doneAt || a.t || 0) ? b : a));
+  return [...Q].reverse().find(j => j.state === 'wait') || null;
+}
+function drawStage() {
+  const el = $('#stage'), box = $('#stageInfo'), j = curJob();
+  const waitN = Q.filter(x => x.state === 'wait').length, runN = running();
+  $('#stageMore').textContent = (runN > 1 || waitN) ? `正在下載 ${runN} 個${waitN ? '，還有 ' + waitN + ' 個排隊' : ''}` : '';
+  if (!j) { if (stg.key !== 'empty') { stg.id = ''; stg.key = 'empty'; stg.idx = 0; el.className = 'stage empty'; el.innerHTML = '<p>複製影片或貼文的網址，再打開 App，<br>就會自動下載並顯示在這裡。</p>'; box.innerHTML = ''; } return; }
+  const M = j.state === 'ok' ? mediaOf(j.files) : [];
+  if (stg.id !== j.id) stg.idx = 0;
+  stg.idx = Math.max(0, Math.min(stg.idx, Math.max(0, M.length - 1)));
+  const key = [j.id, j.state, M.length, stg.idx, j.thumb || '', j.title || '', netWait].join('|');
+  if (key !== stg.key) {
+    stg.id = j.id; stg.key = key;
+    el.className = 'stage ' + j.state;
+    let m = '';
+    if (M.length) {
+      const f = M[stg.idx], t = mimeOf(f);
+      m = t.startsWith('image/') ? `<img class="st-m" src="${esc(f.uri)}" alt="">`
+        : t.startsWith('video/') ? `<video class="st-m" src="${esc(f.uri)}#t=0.5" preload="metadata" muted playsinline></video><button class="st-play" type="button" data-a="full" aria-label="播放">▶</button>`
+        : `${j.thumb ? `<img class="st-m" src="${esc(j.thumb)}" alt="" referrerpolicy="no-referrer">` : ''}<button class="st-play" type="button" data-a="full" aria-label="播放">▶</button>`;
+      if (M.length > 1) m += `<button class="st-nav prev" type="button" data-a="prev" aria-label="上一個">‹</button><button class="st-nav next" type="button" data-a="next" aria-label="下一個">›</button><span class="st-count">${stg.idx + 1} / ${M.length}</span>`;
+    } else {
+      m = (j.thumb ? `<img class="st-m dim" src="${esc(j.thumb)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '')
+        + (j.state === 'ok' ? '' : `<div class="st-over"><div class="st-pct"></div><div class="bar"><i></i></div><div class="st-txt"></div></div>`);
+    }
+    el.innerHTML = m;
+    const acts = (j.state === 'run' || j.state === 'wait') ? '<button class="btn ghost" data-a="cancel" type="button">取消</button>'
+      : j.state === 'ok' ? '<button class="btn" data-a="open" type="button">全螢幕播放</button><button class="btn ghost" data-a="share" type="button">分享</button><button class="btn ghost" data-a="x" type="button">清掉</button>'
+      : `<button class="btn" data-a="retry" type="button">重試</button>${j.state === 'bad' ? '<button class="btn ghost" data-a="detail" type="button">詳細</button>' : ''}<button class="btn ghost" data-a="x" type="button">清掉</button>`;
+    const tags = [qShow(j.q, j.res), j.playlist ? '清單' : '', j.section ? '片段' : '', j.chapters ? '章節' : '', j.sponsor ? '跳贊助' : '', j.hdSrc ? '高畫質來源' : ''].filter(Boolean);
+    box.innerHTML = `<div class="ct">${esc(j.title || j.url)}</div>
+      <div class="cm"><span class="badge">${esc(j.ab)}</span>${j.uploader ? `<span>${esc(j.uploader)}</span>` : ''}${tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>
+      <div class="st ${j.state}" id="stageSt"></div><div class="acts">${acts}</div>`;
+  }
+  // 會一直變的部分：進度、狀態文字
+  const pct = j.state === 'run' ? Math.max(0, j.pct || 0) : 0;
+  const bar = el.querySelector('.bar i'); if (bar) bar.style.width = (j.state === 'run' ? Math.max(2, pct) : j.state === 'wait' ? 0 : 100) + '%';
+  const pp = el.querySelector('.st-pct'); if (pp) pp.textContent = j.state === 'run' ? (pct ? Math.round(pct) + '%' : '…') : j.state === 'wait' ? '排隊中' : j.state === 'bad' ? '失敗' : '已取消';
+  const tt = el.querySelector('.st-txt'); if (tt) tt.textContent = j.state === 'bad' || j.state === 'cancel' ? '' : stText(j);
+  const st = $('#stageSt'); if (st) st.textContent = j.state === 'run' || j.state === 'wait' ? '' : stText(j);
+}
+function stageStep(d) { const j = curJob(); if (!j) return; const n = mediaOf(j.files).length; if (n < 2) return; stg.idx = (stg.idx + d + n) % n; drawStage(); }
+{
+  const el = $('#stage'); let sx = null;
+  el.addEventListener('pointerdown', e => { sx = e.clientX; });
+  el.addEventListener('pointerup', e => {
+    const dx = sx == null ? 0 : e.clientX - sx; sx = null; const j = curJob(); if (!j) return;
+    if (Math.abs(dx) > 40) { stageStep(dx < 0 ? 1 : -1); return; }           // 左右滑：換張
+    const b = e.target.closest('[data-a]');
+    if (b && b.dataset.a === 'prev') stageStep(-1);
+    else if (b && b.dataset.a === 'next') stageStep(1);
+    else if (j.state === 'ok' && mediaOf(j.files).length) playF(j.files, j.title, stg.idx);   // 點一下：放到全螢幕
+  });
+  el.addEventListener('pointercancel', () => { sx = null; });
+  el.addEventListener('dragstart', e => e.preventDefault());     // 不要讓瀏覽器把圖片拖走，才滑得動
+  $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (b && j) act(j, b.dataset.a); });
 }
 function openF(f) { if (!f) return; if (has('fileExists') && f.uri && !N.fileExists(f.uri)) { toast('檔案已經被刪除或搬走了'); return; } has('openFile') ? N.openFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
 function shareF(f) { if (!f) return; has('shareFile') ? N.shareFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
 function act(j, a) {
   const f = (j.files || [])[0];
   if (a === 'cancel') { j.stop = 1; if (j.state === 'wait' || j.igWait) { j.igWait = false; j.state = 'cancel'; j.msg = '已取消'; drawCard(j); saveQ(); } else call('cancel', j.pid); }
-  else if (a === 'open') playF(j.files, j.title);
+  else if (a === 'open') playF(j.files, j.title, j.id === stg.id ? stg.idx : 0);
   else if (a === 'share') shareF(f);
   else if (a === 'retry') { j.noApi = false; j.noHd = false; j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
   else if (a === 'detail') toast(String(j.raw || j.msg).slice(-300), 7000);
-  else if (a === 'x') { const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); const el = document.getElementById(j.id); if (el) el.remove(); counts(); saveQ(); }
+  else if (a === 'x') { const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); drawStage(); counts(); saveQ(); }
 }
 $('#bClearDone').onclick = () => { [...Q].forEach(j => { if (['ok', 'bad', 'cancel'].includes(j.state)) act(j, 'x'); }); };
 function counts() {
@@ -1090,8 +1172,9 @@ function infoLine() {
   else b.hidden = true;
 }
 applyTheme(); refreshEnv();
-drawQual(); drawPreview(); counts(); drawVer();
-restore(); infoLine(); pump();
+drawQual(); drawPreview(); counts(); drawVer(); drawStage();
+$('#dlOpts').hidden = !currentUrls().length;
+restore(); drawStage(); infoLine(); pump();
 { const p = LS('page'); if (p && PAGES.includes(p) && p !== 'dl') page(p); }
 setTimeout(() => { if (S.autoCore && has('updateCore') && Date.now() - (LS('coreAt') || 0) > 20 * 3600e3) { $('#coreMsg').textContent = '自動更新中…'; if (has('updateCoreCh')) N.updateCoreCh(S.channel); else N.updateCore(); } }, 1500);
 setTimeout(checkClip, 600);
@@ -1100,7 +1183,7 @@ setTimeout(() => autoCheck(true), 3000);
 // 瀏覽器預覽時放示範資料，方便看排版
 if (!N) {
   info = { ok: true, url: 'https://www.youtube.com/watch?v=demo', title: '（示範）城市夜景縮時攝影 4K', uploader: '示範頻道', dur: 754, heights: [2160, 1440, 1080, 720, 480, 360], hasSubs: true, thumb: '', chapters: [{ t: 'a' }, { t: 'b' }] };
-  urlBox.value = info.url; probeUrl = info.url; $('#siteTag').textContent = 'YouTube'; drawPreview(); drawQual();
+  urlBox.value = info.url; probeUrl = info.url; $('#siteTag').textContent = 'YouTube'; drawPreview(); drawQual(); $('#dlOpts').hidden = false;
   const demo = [['https://youtu.be/demo2', '720', '（示範）私人影片', 'bad', 0], ['https://www.tiktok.com/@demo/video/1', 'best', '（示範）貓咪跳上冰箱', 'ok', 100], ['https://www.bilibili.com/video/BV1demo', '1080', '（示範）手作木工：做一張小板凳', 'run', 46.2]];
   demo.forEach(([u, q, t, st, pct]) => { const s2 = siteOf(u); const j = { id: 'd' + (seq++), pid: 'dp' + seq, url: u, q, site: s2.k, ab: s2.ab, title: t, thumb: '', state: st, pct, size: '182.4 MB', speed: '3.2 MB/s', eta: 41, k: 0, files: st === 'ok' ? [{ path: '下載/YTDown/TikTok/貓咪跳上冰箱.mp4', uri: '', size: 8.4e6 }] : [], msg: st === 'bad' ? '這是私人影片，沒辦法下載。' : '' }; Q.unshift(j); drawCard(j); });
   $('#dlInfo').textContent = '手機剩 23.4 GB · 存到 下載/YTDown';

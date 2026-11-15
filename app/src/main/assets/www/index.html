@@ -23,7 +23,7 @@
       <button class="btn sm ghost" id="updLater" type="button">稍後</button>
     </div>
     <div id="clipBar" class="clip" hidden>
-      <div class="clip-t"><span class="mut small">剪貼簿有網址</span><span id="clipUrl" class="clip-u"></span></div>
+      <div class="clip-t"><span class="mut small" id="clipLbl">剪貼簿有網址</span><span id="clipUrl" class="clip-u"></span></div>
       <button class="btn sm" id="clipAdd" type="button">加入</button>
       <button class="btn sm ghost" id="clipNo" type="button">忽略</button>
     </div>
@@ -52,7 +52,7 @@
         <div id="qual" class="chips"></div>
         <div id="optRow" class="chips opts"></div>
         <details id="more" class="more">
-          <summary>更多選項</summary>
+          <summary>更多選項（片段、章節、跳贊助）</summary>
           <div class="more-b">
             <div class="item col"><span>只下載一段<small>時間格式 1:23 或 83（秒），留空就是整部</small></span>
               <div class="row"><input id="secFrom" type="text" inputmode="numeric" placeholder="從" autocomplete="off"><span class="mut">到</span><input id="secTo" type="text" inputmode="numeric" placeholder="到" autocomplete="off"></div></div>
@@ -63,9 +63,11 @@
       </div>
     </div>
 
-    <div class="secHead"><h2>下載</h2><span id="qCount" class="mut small"></span><span class="grow"></span><button class="link" id="bClearDone" type="button">清掉已完成</button></div>
-    <div id="queue" class="list"></div>
-    <p id="qEmpty" class="empty">複製影片網址後打開 App 就會自動下載。這裡只顯示正在下載的和最新完成的一筆，其他的在「紀錄」。</p>
+    <!-- 中間的大畫面：目前這一個（下載中 → 完成後直接看） -->
+    <div id="stage" class="stage empty"></div>
+    <div id="stageInfo" class="stage-info"></div>
+    <p id="stageMore" class="mut small center"></p>
+    <div class="legacy" hidden><span id="qCount"></span><button id="bClearDone" type="button"></button><div id="queue"></div><p id="qEmpty"></p></div>
     <p id="dlInfo" class="mut small center"></p>
   </section>
 
