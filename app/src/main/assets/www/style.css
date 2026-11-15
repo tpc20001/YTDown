@@ -284,3 +284,7 @@ body.locked{overflow:hidden}
 .st-hint span{display:block;color:#4dc9ff;font-size:13px;margin-top:2px}
 .st-play{z-index:2}
 .st-nav,.st-count{z-index:3}
+
+/* ---- V0.1.29：大畫面的滑動換張 ---- */
+.st-slide{position:absolute;inset:0;transition:transform .9s cubic-bezier(.45,0,.2,1);will-change:transform}
+@media (prefers-reduced-motion:reduce){.st-slide{transition-duration:.01s}}

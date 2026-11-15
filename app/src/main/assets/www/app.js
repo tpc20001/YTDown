@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.28';
+const UI_VER = 'YTD_UI_V0.1.29';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.29', ['下載完 2 秒後自動播放：影片連播 3 次', '多張的貼文會自動輪播：照片每張停幾秒，慢慢往左滑到下一張，一直循環', '輪播遇到影片：滑進來時就開始播，停在中間完整播一次，再播的時候滑出去換下一個', '換張有滑動的動畫；碰一下畫面就停止自動播放（設定可關）']],
   ['YTD_UI_V0.1.28', ['修正：多張貼文上的「‹ ›」按鈕會變成放大，現在會正確換張']],
   ['YTD_UI_V0.1.27', ['影片直接在下載頁中間那一塊播放，不會放大、也不會跳到另一個播放器', '點畫面＝播放／暫停；播放時左右滑＝快轉（滑越快跳越多、越慢越精準）；下面有進度條', '想放大再按「全螢幕播放」']],
   ['YTD_UI_V0.1.26', ['同一個網址不會重複自動下載：下載過的會問「要再下載一次嗎」，要你按了才會抓', '下載頁改成中間一個大畫面：下載中看進度，下載完直接顯示影片或照片', '多張的貼文可以在大畫面上左右滑，點一下放到全螢幕', '下載頁下面不再列清單，舊的都在「紀錄」', '沒有貼網址時，畫質選項會收起來，讓畫面更大']],
@@ -67,7 +68,7 @@ const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 
 // ---------- 設定
 const DEF = { quality: 'best', conc: 2, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
-  auto: true, autoUpd: true, autoDl: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
+  auto: true, autoUpd: true, autoDl: true, autoPlay: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
   igSlow: true, ttHd: true, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
 let S = Object.assign({}, DEF, LS('set') || {});
 const saveS = () => LS('set', S);
@@ -205,6 +206,7 @@ function page(p) {
   if (p === 'hist') drawHist();
   if (p === 'sites') drawSites();
   if (p === 'set' || p === 'upd') drawSet();
+  if (p !== 'dl') { autoStop(); const v = stageVid(); if (v) v.pause(); }
   window.scrollTo(0, 0);
   LS('page', p);
 }
@@ -611,6 +613,7 @@ window.onDone = s => {
   if (j.site === 'Instagram') igPace();
   j.doneAt = Date.now();
   drawCard(j); trimDone(); saveQ(); pump();
+  if (p.ok) autoBegin(j);
 };
 
 // 下載頁只留最新完成的那一筆（其他的都在「紀錄」裡）；正在跑和排隊的照常顯示
@@ -661,15 +664,15 @@ function drawStage() {
   const M = j.state === 'ok' ? mediaOf(j.files) : [];
   if (stg.id !== j.id) stg.idx = 0;
   stg.idx = Math.max(0, Math.min(stg.idx, Math.max(0, M.length - 1)));
-  const key = [j.id, j.state, M.length, stg.idx, j.thumb || '', j.title || '', netWait].join('|');
+  const key = stageKey(j, M);
   if (key !== stg.key) {
+    autoStop();
     stg.id = j.id; stg.key = key;
     el.className = 'stage ' + j.state;
     let m = '';
     if (M.length) {
-      const f = M[stg.idx], t = mimeOf(f);
-      m = t.startsWith('image/') ? `<img class="st-m" src="${esc(f.uri)}" alt="">`
-        : `<video class="st-m" src="${esc(f.uri)}${t.startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline${!t.startsWith('video/') && j.thumb ? ` poster="${esc(j.thumb)}"` : ''}></video><button class="st-play" type="button" aria-label="播放">▶</button><div class="st-hint" hidden></div><div class="st-ctl" hidden><span class="st-cur">0:00</span><input type="range" class="st-bar" min="0" max="1000" value="0" aria-label="播放進度"><span class="st-dur"></span></div>`;
+      const f = M[stg.idx];
+      m = `<div class="st-slide cur">${slideHTML(j, f)}</div><button class="st-play" type="button" aria-label="播放"${mimeOf(f).startsWith('image/') ? ' hidden' : ''}>▶</button><div class="st-hint" hidden></div><div class="st-ctl" hidden><span class="st-cur">0:00</span><input type="range" class="st-bar" min="0" max="1000" value="0" aria-label="播放進度"><span class="st-dur"></span></div>`;
       if (M.length > 1) m += `<button class="st-nav prev" type="button" data-a="prev" aria-label="上一個">‹</button><button class="st-nav next" type="button" data-a="next" aria-label="下一個">›</button><span class="st-count">${stg.idx + 1} / ${M.length}</span>`;
     } else {
       m = (j.thumb ? `<img class="st-m dim" src="${esc(j.thumb)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '')
@@ -691,38 +694,103 @@ function drawStage() {
   const tt = el.querySelector('.st-txt'); if (tt) tt.textContent = j.state === 'bad' || j.state === 'cancel' ? '' : stText(j);
   const st = $('#stageSt'); if (st) st.textContent = j.state === 'run' || j.state === 'wait' ? '' : stText(j);
 }
-function stageStep(d) { const j = curJob(); if (!j) return; const n = mediaOf(j.files).length; if (n < 2) return; stg.idx = (stg.idx + d + n) % n; drawStage(); }
+const stageKey = (j, M) => [j.id, j.state, M.length, stg.idx, j.thumb || '', j.title || '', netWait].join('|');
+function slideHTML(j, f) {
+  const t = mimeOf(f);
+  return t.startsWith('image/') ? `<img class="st-m" src="${esc(f.uri)}" alt="" draggable="false">`
+    : `<video class="st-m" src="${esc(f.uri)}${t.startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline${!t.startsWith('video/') && j.thumb ? ` poster="${esc(j.thumb)}"` : ''}></video>`;
+}
+const stageEl = $('#stage');
+const stageVid = () => stageEl.querySelector('.st-slide.cur video');
+let stageG = null;      // 手指正在大畫面上做的動作
+function stageWire(v) { // 把影片接上進度條、播放鈕（只對「現在中間這一個」更新畫面）
+  if (v.dataset.w) return; v.dataset.w = '1';
+  const q = c => stageEl.querySelector(c), mine = () => v === stageVid();
+  v.addEventListener('timeupdate', () => { const bar = q('.st-bar'); if (!mine() || (stageG && stageG.mode === 'seek') || !isFinite(v.duration) || !bar) return; bar.value = Math.round(v.currentTime / v.duration * 1000); q('.st-cur').textContent = fmtDur(v.currentTime) || '0:00'; q('.st-dur').textContent = fmtDur(v.duration); });
+  v.addEventListener('play', () => { if (!mine()) return; const b = q('.st-play'), c = q('.st-ctl'); if (b) b.hidden = true; if (c) c.hidden = false; call('keepOn', true); });
+  v.addEventListener('pause', () => { if (!mine()) return; const b = q('.st-play'); if (b) b.hidden = false; call('keepOn', false); });
+  v.addEventListener('ended', () => { if (!mine()) return; const b = q('.st-play'); if (b && !auto.on) b.hidden = false; if (!auto.on) call('keepOn', false); });
+  v.addEventListener('error', () => { if (mine()) toast('這個檔案在這裡播不了，按「全螢幕播放」或用其他 App 開', 4500); });
+}
+function stageToggle() {
+  const v = stageVid(); if (!v) return; stageWire(v);
+  if (v.paused) { if (!v.dataset.s) { v.dataset.s = '1'; try { v.currentTime = 0; } catch (e) {} } const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+  else v.pause();
+}
+// 換到第 n 個。dir：1＝新的從右邊滑進來（往左滑），-1＝從左邊進來
+function slideTo(n, dir, fromAuto) {
+  const j = curJob(); if (!j) return; const M = mediaOf(j.files); if (M.length < 2) return;
+  n = ((n % M.length) + M.length) % M.length;
+  const old = stageEl.querySelector('.st-slide.cur');
+  if (!old) { stg.idx = n; drawStage(); return; }
+  const f = M[n], isImg = mimeOf(f).startsWith('image/');
+  const nw = document.createElement('div'); nw.className = 'st-slide cur'; nw.innerHTML = slideHTML(j, f); nw.style.transform = `translateX(${dir * 100}%)`;
+  old.classList.remove('cur'); stageEl.insertBefore(nw, old.nextSibling);
+  stg.idx = n; stg.key = stageKey(j, M);                                   // 自己換好了，drawStage 不用重畫
+  const cnt = stageEl.querySelector('.st-count'); if (cnt) cnt.textContent = `${n + 1} / ${M.length}`;
+  const b = stageEl.querySelector('.st-play'), c = stageEl.querySelector('.st-ctl'); if (b) b.hidden = isImg || fromAuto; if (c) c.hidden = true;
+  void nw.offsetWidth;                                                     // 讓瀏覽器先記住起點，動畫才會跑
+  nw.style.transform = ''; old.style.transform = `translateX(${-dir * 100}%)`;
+  setTimeout(() => { const ov = old.querySelector('video'); if (ov) ov.pause(); old.remove(); }, 950);
+  if (fromAuto && auto.on) {
+    const v = nw.querySelector('video');
+    if (v) autoPlayVid(v, true);                                           // 影片：滑進來的時候就開始播
+    else { clearTimeout(auto.t); auto.t = setTimeout(() => { if (auto.on) slideTo(stg.idx + 1, 1, true); }, 950 + 3200); }
+  }
+}
+function stageStep(d) { autoStop(); slideTo(stg.idx + d, d, false); }
+
+// ---- 下載完自動播放
+const auto = { on: false, t: 0, n: 0 };
+function autoStop() { auto.on = false; clearTimeout(auto.t); }
+function autoBegin(j) {     // 下載完 2 秒後開始
+  if (!S.autoPlay) return;
+  clearTimeout(auto.t);
+  auto.t = setTimeout(() => {
+    if (curJob() !== j || j.state !== 'ok' || !$('#p_dl').classList.contains('on') || !$('#player').hidden || !$('#igPane').hidden || document.hidden) return;
+    auto.on = true; autoRun();
+  }, 2000);
+}
+function autoRun() {
+  if (!auto.on) return; const j = curJob(); if (!j) return; const M = mediaOf(j.files); if (!M.length) { autoStop(); return; }
+  const v = stageVid(); clearTimeout(auto.t);
+  if (v) autoPlayVid(v, M.length > 1);
+  else if (M.length > 1) auto.t = setTimeout(() => { if (auto.on) slideTo(stg.idx + 1, 1, true); }, 3200);   // 照片：停一下再滑到下一張
+  else autoStop();
+}
+function autoPlayVid(v, multi) {
+  stageWire(v); v.dataset.s = '1'; auto.n = 0;
+  if (!v.dataset.auto) {
+    v.dataset.auto = '1';
+    v.addEventListener('ended', () => {
+      if (!auto.on || v !== stageVid()) return;
+      auto.n++;
+      const again = () => { try { v.currentTime = 0; } catch (e) {} const p = v.play(); if (p && p.catch) p.catch(() => {}); };
+      if (!multi) { if (auto.n < 3) again(); else { autoStop(); const b = stageEl.querySelector('.st-play'); if (b) b.hidden = false; call('keepOn', false); } return; }   // 單一影片：播 3 次
+      again();                                                             // 輪播裡的影片：第 2 次停在中間完整播
+      if (auto.n >= 2) slideTo(stg.idx + 1, 1, true);                      // 第 3 次開始播的同時，滑出去換下一個
+    });
+  }
+  try { v.currentTime = 0; } catch (e) {}
+  const p = v.play(); if (p && p.catch) p.catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) { autoStop(); const v = stageVid(); if (v) v.pause(); } });
+
 {
-  // 大畫面上的操作：影片就在這一塊播放（不放大）。點一下＝播放／暫停；播放過後左右滑＝快轉；照片左右滑＝換張
-  const el = $('#stage'); let g = null;
-  const vid = () => el.querySelector('video.st-m');
+  // 大畫面上的操作：影片就在這一塊播放（不放大）。點一下＝播放／暫停；播放過後左右滑＝快轉；沒在播時左右滑＝換張
+  const el = stageEl;
   const hint = (v, t, d) => { const h = el.querySelector('.st-hint'); if (!h) return; h.hidden = false; h.innerHTML = `<b>${fmtDur(t) || '0:00'}</b> / ${fmtDur(v.duration) || '0:00'}<span>${d >= 0 ? '+' : '−'}${fmtDur(Math.abs(d)) || '0:00'}</span>`; };
-  function wire(v) {
-    if (v.dataset.w) return; v.dataset.w = '1';
-    const ctl = el.querySelector('.st-ctl'), bar = el.querySelector('.st-bar'), btn = el.querySelector('.st-play');
-    if (ctl) ctl.hidden = false;
-    v.addEventListener('timeupdate', () => { if ((g && g.mode === 'seek') || !isFinite(v.duration) || !bar) return; bar.value = Math.round(v.currentTime / v.duration * 1000); el.querySelector('.st-cur').textContent = fmtDur(v.currentTime) || '0:00'; el.querySelector('.st-dur').textContent = fmtDur(v.duration); });
-    v.addEventListener('play', () => { if (btn) btn.hidden = true; call('keepOn', true); });
-    v.addEventListener('pause', () => { if (btn) btn.hidden = false; call('keepOn', false); });
-    v.addEventListener('ended', () => { if (btn) btn.hidden = false; call('keepOn', false); });
-    v.addEventListener('error', () => toast('這個檔案在這裡播不了，按「全螢幕播放」或用其他 App 開', 4500));
-    if (bar) bar.addEventListener('input', () => { if (isFinite(v.duration)) { v.currentTime = bar.value / 1000 * v.duration; el.querySelector('.st-cur').textContent = fmtDur(v.currentTime) || '0:00'; } });
-  }
-  function toggle() {
-    const v = vid(); if (!v) return; wire(v);
-    if (v.paused) { if (!v.dataset.s) { v.dataset.s = '1'; try { v.currentTime = 0; } catch (e) {} } const p = v.play(); if (p && p.catch) p.catch(() => {}); }
-    else v.pause();
-  }
+  el.addEventListener('input', e => { if (!e.target.classList.contains('st-bar')) return; const v = stageVid(); if (v && isFinite(v.duration)) { v.currentTime = e.target.value / 1000 * v.duration; el.querySelector('.st-cur').textContent = fmtDur(v.currentTime) || '0:00'; } });
   el.addEventListener('pointerdown', e => {
+    autoStop();                                                             // 手一碰就不再自動播
     if (e.target.closest('.st-ctl')) return;
-    const v = vid();
-    const hit = e.target.closest('[data-a]');     // 先記下按到哪個按鈕（之後事件都會算在大畫面上）
-    g = { x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: v ? v.currentTime : 0, tgt: v ? v.currentTime : 0, applied: 0, btn: hit ? hit.dataset.a : '' };
+    const v = stageVid(), hit = e.target.closest('[data-a]');
+    stageG = { x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: v ? v.currentTime : 0, tgt: v ? v.currentTime : 0, applied: 0, btn: hit ? hit.dataset.a : '' };
     try { el.setPointerCapture(e.pointerId); } catch (x) {}
   });
   el.addEventListener('pointermove', e => {
-    if (!g) return;
-    const v = vid(), dx = e.clientX - g.x0, dy = e.clientY - g.y0, now = performance.now();
+    const g = stageG; if (!g) return;
+    const v = stageVid(), dx = e.clientX - g.x0, dy = e.clientY - g.y0, now = performance.now();
     if (!g.mode) {
       if (!(Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2)) return;
       g.mode = v && v.dataset.s && isFinite(v.duration) ? 'seek' : 'swipe';
@@ -739,21 +807,21 @@ function stageStep(d) { const j = curJob(); if (!j) return; const n = mediaOf(j.
     }
   });
   const end = (e, cancel) => {
-    const gg = g; g = null; if (!gg) return;
+    const gg = stageG; stageG = null; if (!gg) return;
     const h = el.querySelector('.st-hint'); if (h) h.hidden = true;
     const j = curJob(); if (cancel || !j) return;
-    if (gg.mode === 'seek') { const v = vid(); if (v) v.currentTime = gg.tgt; return; }
+    if (gg.mode === 'seek') { const v = stageVid(); if (v) v.currentTime = gg.tgt; return; }
     if (gg.mode === 'swipe') { if (Math.abs(e.clientX - gg.x0) > 40) stageStep(e.clientX - gg.x0 < 0 ? 1 : -1); return; }
     if (gg.btn === 'prev') { stageStep(-1); return; }
     if (gg.btn === 'next') { stageStep(1); return; }
     if (j.state !== 'ok') return;
-    if (vid()) toggle();                                                        // 影片：就在這一塊播
-    else if (mediaOf(j.files).length) playF(j.files, j.title, stg.idx);         // 照片：點一下放大看
+    if (stageVid()) stageToggle();                                          // 影片：就在這一塊播
+    else if (mediaOf(j.files).length) playF(j.files, j.title, stg.idx);     // 照片：點一下放大看
   };
   el.addEventListener('pointerup', e => end(e, false));
   el.addEventListener('pointercancel', e => end(e, true));
   el.addEventListener('dragstart', e => e.preventDefault());
-  $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (!b || !j) return; if (b.dataset.a === 'open') { const v = vid(); if (v) v.pause(); } act(j, b.dataset.a); });
+  $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (!b || !j) return; if (b.dataset.a === 'open') { autoStop(); const v = stageVid(); if (v) v.pause(); } act(j, b.dataset.a); });
 }
 function openF(f) { if (!f) return; if (has('fileExists') && f.uri && !N.fileExists(f.uri)) { toast('檔案已經被刪除或搬走了'); return; } has('openFile') ? N.openFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
 function shareF(f) { if (!f) return; has('shareFile') ? N.shareFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
@@ -922,7 +990,7 @@ function drawSet() {
   $('#galNote').textContent = verNum(call('shellVer')) < 108 && N ? '要外殼 V0.1.08 以上才有用，請先到「更新」裝新外殼' : (S.dest && S.dest.uri ? '你有自己選存檔資料夾，所以這個設定不會用到' : '會存到相簿的 YTDown' + (S.subdir ? '／平台名稱' : '') + '，其他檔案照舊存到「下載」');
   $('#concV').textContent = S.conc;
   $('#destName').textContent = S.dest && S.dest.uri ? '目前：' + S.dest.name + (has('treeOk') && !N.treeOk(S.dest.uri) ? '（不能用了，請重選）' : '') : '目前：手機的「下載/YTDown」';
-  bindSw('#sSubdir', 'subdir'); bindSw('#sTtHd', 'ttHd'); bindSw('#sPlaylist', 'playlist', () => sel.playlist = S.playlist);
+  bindSw('#sSubdir', 'subdir'); bindSw('#sTtHd', 'ttHd'); bindSw('#sAutoPlay', 'autoPlay', () => { if (!S.autoPlay) autoStop(); }); bindSw('#sPlaylist', 'playlist', () => sel.playlist = S.playlist);
   bindSw('#sSubs', 'subs', () => { sel.subs = S.subs; drawQual(); }); bindSw('#sEmbed', 'embed', () => { sel.embed = S.embed; drawQual(); });
   bindSw('#sSponsor', 'sponsor', () => { sel.sponsor = S.sponsor; drawQual(); });
   bindSw('#sWifi', 'wifi', pump); bindSw('#sIgSlow', 'igSlow', () => { igNext = 0; pump(); }); bindSw('#sAria', 'aria');
