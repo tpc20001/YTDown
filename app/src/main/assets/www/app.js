@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.26';
+const UI_VER = 'YTD_UI_V0.1.27';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.27', ['影片直接在下載頁中間那一塊播放，不會放大、也不會跳到另一個播放器', '點畫面＝播放／暫停；播放時左右滑＝快轉（滑越快跳越多、越慢越精準）；下面有進度條', '想放大再按「全螢幕播放」']],
   ['YTD_UI_V0.1.26', ['同一個網址不會重複自動下載：下載過的會問「要再下載一次嗎」，要你按了才會抓', '下載頁改成中間一個大畫面：下載中看進度，下載完直接顯示影片或照片', '多張的貼文可以在大畫面上左右滑，點一下放到全螢幕', '下載頁下面不再列清單，舊的都在「紀錄」', '沒有貼網址時，畫質選項會收起來，讓畫面更大']],
   ['YTD_UI_V0.1.25', ['全自動：打開 App 時剪貼簿有影片網址，就直接用預設畫質下載，不用按任何按鈕（設定可關）', '從其他 App 分享進來也一樣直接下載', '下載頁只留最新完成的那一筆，其他的都收在「紀錄」']],
   ['YTD_UI_V0.1.24', ['TikTok：下載前先找有沒有更高畫質的來源（透過 tikwm.com 查詢），有就用高畫質的，沒有就照原本方式', 'TikTok 的照片輪播貼文也能下載了', '設定裡可以關掉這個功能']],
@@ -667,8 +668,7 @@ function drawStage() {
     if (M.length) {
       const f = M[stg.idx], t = mimeOf(f);
       m = t.startsWith('image/') ? `<img class="st-m" src="${esc(f.uri)}" alt="">`
-        : t.startsWith('video/') ? `<video class="st-m" src="${esc(f.uri)}#t=0.5" preload="metadata" muted playsinline></video><button class="st-play" type="button" data-a="full" aria-label="播放">▶</button>`
-        : `${j.thumb ? `<img class="st-m" src="${esc(j.thumb)}" alt="" referrerpolicy="no-referrer">` : ''}<button class="st-play" type="button" data-a="full" aria-label="播放">▶</button>`;
+        : `<video class="st-m" src="${esc(f.uri)}${t.startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline${!t.startsWith('video/') && j.thumb ? ` poster="${esc(j.thumb)}"` : ''}></video><button class="st-play" type="button" aria-label="播放">▶</button><div class="st-hint" hidden></div><div class="st-ctl" hidden><span class="st-cur">0:00</span><input type="range" class="st-bar" min="0" max="1000" value="0" aria-label="播放進度"><span class="st-dur"></span></div>`;
       if (M.length > 1) m += `<button class="st-nav prev" type="button" data-a="prev" aria-label="上一個">‹</button><button class="st-nav next" type="button" data-a="next" aria-label="下一個">›</button><span class="st-count">${stg.idx + 1} / ${M.length}</span>`;
     } else {
       m = (j.thumb ? `<img class="st-m dim" src="${esc(j.thumb)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '')
@@ -692,19 +692,67 @@ function drawStage() {
 }
 function stageStep(d) { const j = curJob(); if (!j) return; const n = mediaOf(j.files).length; if (n < 2) return; stg.idx = (stg.idx + d + n) % n; drawStage(); }
 {
-  const el = $('#stage'); let sx = null;
-  el.addEventListener('pointerdown', e => { sx = e.clientX; });
-  el.addEventListener('pointerup', e => {
-    const dx = sx == null ? 0 : e.clientX - sx; sx = null; const j = curJob(); if (!j) return;
-    if (Math.abs(dx) > 40) { stageStep(dx < 0 ? 1 : -1); return; }           // 左右滑：換張
-    const b = e.target.closest('[data-a]');
-    if (b && b.dataset.a === 'prev') stageStep(-1);
-    else if (b && b.dataset.a === 'next') stageStep(1);
-    else if (j.state === 'ok' && mediaOf(j.files).length) playF(j.files, j.title, stg.idx);   // 點一下：放到全螢幕
+  // 大畫面上的操作：影片就在這一塊播放（不放大）。點一下＝播放／暫停；播放過後左右滑＝快轉；照片左右滑＝換張
+  const el = $('#stage'); let g = null;
+  const vid = () => el.querySelector('video.st-m');
+  const hint = (v, t, d) => { const h = el.querySelector('.st-hint'); if (!h) return; h.hidden = false; h.innerHTML = `<b>${fmtDur(t) || '0:00'}</b> / ${fmtDur(v.duration) || '0:00'}<span>${d >= 0 ? '+' : '−'}${fmtDur(Math.abs(d)) || '0:00'}</span>`; };
+  function wire(v) {
+    if (v.dataset.w) return; v.dataset.w = '1';
+    const ctl = el.querySelector('.st-ctl'), bar = el.querySelector('.st-bar'), btn = el.querySelector('.st-play');
+    if (ctl) ctl.hidden = false;
+    v.addEventListener('timeupdate', () => { if ((g && g.mode === 'seek') || !isFinite(v.duration) || !bar) return; bar.value = Math.round(v.currentTime / v.duration * 1000); el.querySelector('.st-cur').textContent = fmtDur(v.currentTime) || '0:00'; el.querySelector('.st-dur').textContent = fmtDur(v.duration); });
+    v.addEventListener('play', () => { if (btn) btn.hidden = true; call('keepOn', true); });
+    v.addEventListener('pause', () => { if (btn) btn.hidden = false; call('keepOn', false); });
+    v.addEventListener('ended', () => { if (btn) btn.hidden = false; call('keepOn', false); });
+    v.addEventListener('error', () => toast('這個檔案在這裡播不了，按「全螢幕播放」或用其他 App 開', 4500));
+    if (bar) bar.addEventListener('input', () => { if (isFinite(v.duration)) { v.currentTime = bar.value / 1000 * v.duration; el.querySelector('.st-cur').textContent = fmtDur(v.currentTime) || '0:00'; } });
+  }
+  function toggle() {
+    const v = vid(); if (!v) return; wire(v);
+    if (v.paused) { if (!v.dataset.s) { v.dataset.s = '1'; try { v.currentTime = 0; } catch (e) {} } const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+    else v.pause();
+  }
+  el.addEventListener('pointerdown', e => {
+    if (e.target.closest('.st-ctl')) return;
+    const v = vid();
+    g = { x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: v ? v.currentTime : 0, tgt: v ? v.currentTime : 0, applied: 0 };
+    try { el.setPointerCapture(e.pointerId); } catch (x) {}
   });
-  el.addEventListener('pointercancel', () => { sx = null; });
-  el.addEventListener('dragstart', e => e.preventDefault());     // 不要讓瀏覽器把圖片拖走，才滑得動
-  $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (b && j) act(j, b.dataset.a); });
+  el.addEventListener('pointermove', e => {
+    if (!g) return;
+    const v = vid(), dx = e.clientX - g.x0, dy = e.clientY - g.y0, now = performance.now();
+    if (!g.mode) {
+      if (!(Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2)) return;
+      g.mode = v && v.dataset.s && isFinite(v.duration) ? 'seek' : 'swipe';
+      g.lx = e.clientX; g.lt = now; if (v) g.base = g.tgt = v.currentTime;
+    }
+    if (g.mode === 'seek' && v) {
+      const step = e.clientX - g.lx, dt = Math.max(now - g.lt, 1), sp = Math.abs(step) / dt;
+      const maxGain = Math.min(4, Math.max(0.06, v.duration / 400)), k = Math.min(1, Math.max(0, (sp - 0.12) / 1.4));
+      g.tgt = Math.min(v.duration, Math.max(0, g.tgt + step * (0.035 + (maxGain - 0.035) * k * k))); g.lx = e.clientX; g.lt = now;
+      hint(v, g.tgt, g.tgt - g.base);
+      const bar = el.querySelector('.st-bar'); if (bar) bar.value = Math.round(g.tgt / v.duration * 1000);
+      const cur = el.querySelector('.st-cur'); if (cur) cur.textContent = fmtDur(g.tgt) || '0:00';
+      if (now - g.applied > 160) { g.applied = now; v.currentTime = g.tgt; }
+    }
+  });
+  const end = (e, cancel) => {
+    const gg = g; g = null; if (!gg) return;
+    const h = el.querySelector('.st-hint'); if (h) h.hidden = true;
+    const j = curJob(); if (cancel || !j) return;
+    if (gg.mode === 'seek') { const v = vid(); if (v) v.currentTime = gg.tgt; return; }
+    if (gg.mode === 'swipe') { if (Math.abs(e.clientX - gg.x0) > 40) stageStep(e.clientX - gg.x0 < 0 ? 1 : -1); return; }
+    const b = e.target.closest('[data-a]');
+    if (b && b.dataset.a === 'prev') { stageStep(-1); return; }
+    if (b && b.dataset.a === 'next') { stageStep(1); return; }
+    if (j.state !== 'ok') return;
+    if (vid()) toggle();                                                        // 影片：就在這一塊播
+    else if (mediaOf(j.files).length) playF(j.files, j.title, stg.idx);         // 照片：點一下放大看
+  };
+  el.addEventListener('pointerup', e => end(e, false));
+  el.addEventListener('pointercancel', e => end(e, true));
+  el.addEventListener('dragstart', e => e.preventDefault());
+  $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (!b || !j) return; if (b.dataset.a === 'open') { const v = vid(); if (v) v.pause(); } act(j, b.dataset.a); });
 }
 function openF(f) { if (!f) return; if (has('fileExists') && f.uri && !N.fileExists(f.uri)) { toast('檔案已經被刪除或搬走了'); return; } has('openFile') ? N.openFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
 function shareF(f) { if (!f) return; has('shareFile') ? N.shareFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
@@ -1134,7 +1182,7 @@ pEl.addEventListener('pointermove', e => {
   }
   if (gs.mode === 'seek' && isFinite(pv.duration)) {
     const step = e.clientX - gs.lx, dt = Math.max(now - gs.lt, 1), v = Math.abs(step) / dt;      // 手指速度（像素／毫秒）
-    const maxGain = Math.min(4, Math.max(0.35, pv.duration / 400));                               // 長片快滑一次能跳比較遠
+    const maxGain = Math.min(4, Math.max(0.06, pv.duration / 400));                               // 長片快滑一次能跳比較遠
     const k = Math.min(1, Math.max(0, (v - 0.12) / 1.4));
     const gain = 0.035 + (maxGain - 0.035) * k * k;                                               // 每滑一個像素跳幾秒：慢＝很細，快＝很多
     gs.tgt = Math.min(pv.duration, Math.max(0, gs.tgt + step * gain)); gs.lx = e.clientX; gs.lt = now;
