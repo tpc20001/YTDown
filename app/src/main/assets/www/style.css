@@ -312,3 +312,6 @@ body.locked{overflow:hidden}
 .ql-n{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ql-m{font-size:11.5px;color:var(--mut);display:flex;gap:6px;align-items:center;font-variant-numeric:tabular-nums}
 .ql .bar{height:4px}
+.ql-i{flex:none;width:18px;text-align:center;font-size:12px;font-weight:700;color:var(--mut);font-variant-numeric:tabular-nums}
+.ql.ok .ql-s{color:var(--ok,#4cd88a)}.ql.ok,.ql.cancel{opacity:.7}.ql.bad .ql-s{color:#ff8a96}
+.st-cap{font-size:13px;letter-spacing:.12em;color:#aab3bf}

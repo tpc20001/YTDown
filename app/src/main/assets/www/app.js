@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.40', ['一次丟好幾個時，大畫面改顯示「這一批」的總進度（完成幾個／共幾個、合計速度），下面清單照順序列出每一個（包含已完成的），另有「全部取消」']],
   ['YTD_UI_V0.1.39', ['下載頁的大畫面下面多了「排隊清單」：其他正在下載、排隊中的都看得到，可以個別取消', '同時下載預設改成 3 個，並依平台自動限制：YouTube 最多 2 個（每個本身已經多線）、Telegram 最多 3 個、IG 一次 1 個（慢慢抓）']],
   ['YTD_UI_V0.1.38', ['Telegram 登入後不再先預覽，貼上就直接下載', '預覽失敗不再顯示紅字（只有需要你處理的，例如要登入，才會提示）', '回到 App 時多讀幾次剪貼簿，平板上也能穩定自動下載']],
   ['YTD_V0.1.10（外殼）／YTD_UI_V0.1.37', ['修正：Telegram 登入一直卡在「連線到 Telegram 中…」']],
@@ -715,10 +716,44 @@ function curJob() {
   const F = Q.filter(j => ['ok', 'bad', 'cancel'].includes(j.state)); if (F.length) return F.reduce((a, b) => ((b.doneAt || b.t || 0) > (a.doneAt || a.t || 0) ? b : a));
   return [...Q].reverse().find(j => j.state === 'wait') || null;
 }
+// ---- 一次丟好幾個：大畫面改顯示「這一批」的總進度，下面清單列出每一個
+const batch = { m: new Map() };   // id → 最後看到的樣子（完成後會從 Q 拿掉，所以自己記）
+function batchNow() {
+  const act = Q.filter(j => j.state === 'run' || j.state === 'wait');
+  if (!act.length) { batch.m.clear(); return null; }
+  act.forEach(j => { if (!batch.m.has(j.id)) batch.m.set(j.id, {}); });
+  const L = [];
+  batch.m.forEach((snap, id) => {
+    const j = Q.find(x => x.id === id);
+    if (j) Object.assign(snap, { id, title: j.title, url: j.url, ab: j.ab, thumb: j.thumb, state: j.state, pct: j.pct || 0, speed: j.speed, spd: j.state === 'run' && j.sm ? j.sm.spd || 0 : 0, left: j.state === 'run' && j.total > 0 ? j.total * (1 - (j.pct || 0) / 100) : 0, t: j.t || 0, j });
+    else if (snap.j) { if (snap.state === 'run' || snap.state === 'wait') snap.state = 'ok'; snap.spd = 0; snap.left = 0; snap.j = null; }
+    if (snap.id) L.push(snap);
+  });
+  return L.length >= 2 ? L : null;
+}
+const bDone = s => s.state === 'ok' || s.state === 'bad' || s.state === 'cancel';
+function drawBatch(L) {
+  const el = $('#stage'), box = $('#stageInfo');
+  if (stg.key !== 'batch') {
+    autoStop(); stg.id = ''; stg.key = 'batch'; stg.idx = 0; pager.el = null;
+    el.className = 'stage run batch';
+    el.innerHTML = `<div class="st-over"><div class="st-cap">總進度</div><div class="st-pct"></div><div class="bar"><i></i></div><div class="st-txt"></div></div>`;
+    box.innerHTML = `<div class="ct" id="bTitle"></div><div class="acts"><button class="btn ghost" data-a="cancelAll" type="button">全部取消</button></div>`;
+  }
+  const n = L.length, done = L.filter(bDone).length, runL = L.filter(s => s.state === 'run');
+  const tot = L.reduce((a, s) => a + (bDone(s) ? 100 : s.state === 'run' ? Math.min(100, s.pct) : 0), 0) / n;
+  const spd = runL.reduce((a, s) => a + s.spd, 0), left = runL.reduce((a, s) => a + s.left, 0);
+  el.querySelector('.st-pct').textContent = Math.floor(tot) + '%';
+  el.querySelector('.bar i').style.width = Math.max(2, tot) + '%';
+  el.querySelector('.st-txt').textContent = [`完成 ${done} / ${n} 個`, runL.length ? `${runL.length} 個同時下載` : '', spd > 0 ? '合計 ' + fmtSize(spd) + '/s' : '', left > 0 && spd > 0 && !L.some(s => s.state === 'wait') ? '剩 ' + fmtEta(Math.round(left / spd)) : ''].filter(Boolean).join(' · ');
+  $('#bTitle').textContent = `這一批共 ${n} 個檔案`;
+}
 function drawStage() {
-  const el = $('#stage'), box = $('#stageInfo'), j = curJob();
-  const waitN = Q.filter(x => x.state === 'wait').length, runN = running();
+  const el = $('#stage'), box = $('#stageInfo');
   $('#stageMore').textContent = '';
+  const B = batchNow(); if (B) return drawBatch(B);
+  if (stg.key === 'batch') stg.key = '';
+  const j = curJob();
   if (!j) { if (stg.key !== 'empty') { stg.id = ''; stg.key = 'empty'; stg.idx = 0; el.className = 'stage empty'; el.innerHTML = '<p>複製影片或貼文的網址，再打開 App，<br>就會自動下載並顯示在這裡。</p>'; box.innerHTML = ''; } return; }
   const M = j.state === 'ok' ? mediaOf(j.files) : [];
   if (stg.id !== j.id) stg.idx = 0;
@@ -802,16 +837,24 @@ function slideTo(n, dir, fromAuto) {
   }
 }
 function drawQueue() {
-  const cur = curJob(), L = Q.filter(j => (j.state === 'run' || j.state === 'wait') && j !== cur).sort((a, b) => (a.state === b.state ? (a.t || 0) - (b.t || 0) : a.state === 'run' ? -1 : 1));
   const box = $('#qList'); if (!box) return;
+  const B = batchNow();
+  const L = B ? [...B].sort((a, b) => (a.t || 0) - (b.t || 0)) : [];      // 照丟進來的順序
   box.hidden = !L.length;
-  if (!L.length) { box.innerHTML = ''; return; }
-  const key = L.map(j => j.id + j.state + (j.title || '') + (j.thumb ? 1 : 0)).join('|');
+  if (!L.length) { box.innerHTML = ''; box.dataset.key = ''; return; }
+  const key = L.map(s => s.id + s.state + (s.title || '') + (s.thumb ? 1 : 0)).join('|');
+  const runN = L.filter(s => s.state === 'run').length, waitN = L.filter(s => s.state === 'wait').length, doneN = L.filter(bDone).length;
   if (box.dataset.key !== key) {
     box.dataset.key = key;
-    box.innerHTML = `<div class="ql-h">排隊清單 <span class="mut small">${L.filter(j => j.state === 'run').length} 個下載中 · ${L.filter(j => j.state === 'wait').length} 個排隊</span></div>` + L.map(j => `<div class="ql" data-id="${j.id}">${thumbImg(j.thumb, 'ql-t')}<div class="ql-b"><div class="ql-n">${esc(j.title || j.url)}</div><div class="ql-m"><span class="badge">${esc(j.ab)}</span><span class="ql-s"></span></div><div class="bar"><i></i></div></div><button class="btn sm ghost" data-a="cancel" type="button">取消</button></div>`).join('');
+    box.innerHTML = `<div class="ql-h">下載清單 <span class="mut small">${[runN ? runN + ' 個下載中' : '', waitN ? waitN + ' 個排隊' : '', doneN ? doneN + ' 個完成' : ''].filter(Boolean).join(' · ')}</span></div>`
+      + L.map((s, i) => `<div class="ql ${s.state}" data-id="${s.id}"><span class="ql-i">${i + 1}</span>${thumbImg(s.thumb, 'ql-t')}<div class="ql-b"><div class="ql-n">${esc(s.title || s.url)}</div><div class="ql-m"><span class="badge">${esc(s.ab)}</span><span class="ql-s"></span></div><div class="bar"><i></i></div></div>${bDone(s) ? '' : '<button class="btn sm ghost" data-a="cancel" type="button">取消</button>'}</div>`).join('');
   }
-  L.forEach(j => { const r = box.querySelector(`[data-id="${j.id}"]`); if (!r) return; r.querySelector('.bar i').style.width = (j.state === 'run' ? Math.max(2, j.pct || 0) : 0) + '%'; r.querySelector('.ql-s').textContent = j.state === 'run' ? [j.pct ? Math.round(j.pct) + '%' : '連線中', j.speed].filter(Boolean).join(' · ') : stText(j); });
+  L.forEach(s => {
+    const r = box.querySelector(`[data-id="${s.id}"]`); if (!r) return;
+    r.querySelector('.bar i').style.width = (s.state === 'run' ? Math.max(2, s.pct) : bDone(s) ? 100 : 0) + '%';
+    r.querySelector('.ql-s').textContent = s.state === 'run' ? [s.pct ? Math.round(s.pct) + '%' : '連線中', s.speed].filter(Boolean).join(' · ')
+      : s.state === 'wait' ? (s.j ? stText(s.j) : '排隊中') : { ok: '✓ 完成', bad: '失敗', cancel: '已取消' }[s.state];
+  });
 }
 function stageStep(d) { autoStop(); slideTo(stg.idx + d, d, false); }
 
@@ -965,7 +1008,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
   el.addEventListener('pointercancel', e => end(e, true));
   el.addEventListener('dragstart', e => e.preventDefault());
   $('#qList').addEventListener('click', e => { const b = e.target.closest('[data-a]'), r = e.target.closest('.ql'); if (!b || !r) return; const j = Q.find(x => x.id === r.dataset.id); if (j) act(j, b.dataset.a); });
-  $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (!b || !j) return; if (b.dataset.a === 'open') { autoStop(); stagePause(); } act(j, b.dataset.a); });
+  $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (b && b.dataset.a === 'cancelAll') { Q.filter(x => x.state === 'run' || x.state === 'wait').forEach(x => act(x, 'cancel')); return; } if (!b || !j) return; if (b.dataset.a === 'open') { autoStop(); stagePause(); } act(j, b.dataset.a); });
 }
 function openF(f) { if (!f) return; if (has('fileExists') && f.uri && !N.fileExists(f.uri)) { toast('檔案已經被刪除或搬走了'); return; } has('openFile') ? N.openFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
 function shareF(f) { if (!f) return; has('shareFile') ? N.shareFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
