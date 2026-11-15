@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.20';
+const UI_VER = 'YTD_UI_V0.1.21';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.21', ['平台頁：已登入的網站多了「重貼」，可以直接換新的代碼', 'IG、FB 多了「App 內登入」當備用（如果你已經在 App 的瀏覽器裡登入過，按一下就能沿用）', 'IG 登入失敗時會顯示 IG 實際回了什麼，方便找原因']],
   ['YTD_UI_V0.1.20', ['Instagram、Facebook 改成只用「貼代碼」登入（不在 App 裡輸入帳號密碼，避開 Meta 的驗證和鎖帳號風險）', 'IG 慢慢下載：一次只抓一則、每則隔幾秒、每 20 則休息 2～4 分鐘（設定可關）', 'IG 帳號瀏覽載入貼文時也放慢', '支援平台加上 Telegram（公開頻道貼文）']],
   ['YTD_UI_V0.1.19', ['Instagram：照片、影片、多張貼文、限時動態都能下載（要先在「平台」登入 IG）', 'IG 帳號瀏覽：搜尋帳號或貼上個人頁網址，一次載入 100 則、預設全勾、可以一次全部下載', '內建播放器：紀錄裡直接播放影片、看照片；左右滑快轉（滑越快跳越多、越慢越精準）、點兩下左右跳 10 秒、往下滑關閉、記住上次看到哪', '紀錄：可依日期、檔案大小、標題、作者排序；可搜尋作者（打一部分就找得到）；點作者看他的全部', '平台登入多了「貼代碼」：每個平台都能貼 Cookie 登入']],
   ['YTD_V0.1.07（外殼）', ['新增可帶登入資料的網路請求、直接下載檔案（IG 照片用）', '播放器用的橫向、螢幕不關、全螢幕', 'APK 只留 64 位元，從 160 MB 縮到約三分之一；App 內更新外殼改成邊下載邊存，並顯示進度']],
@@ -119,8 +120,9 @@ async function igGet(path) {
   if (!has('http')) throw new Error('IG_SHELL');
   const c = jcall('cookieInfo', 'instagram'); if (!c || !c.has) throw new Error('IG_LOGIN');
   const r = await httpReq({ url: 'https://www.instagram.com/api/v1/' + path, cookies: 'instagram', headers: IG_HDR });
-  let j; try { j = JSON.parse(r.body); } catch (e) { throw new Error(r.status === 429 ? 'IG_RATE' : (r.status === 401 || r.status === 403 || /login|<html/i.test(r.body || '')) ? 'IG_LOGIN' : 'IG_HTTP ' + r.status); }
-  if (j.status === 'fail' || j.require_login) throw new Error((r.status === 429 || /wait|few minutes/i.test(j.message || '')) ? 'IG_RATE' : (j.require_login || /login|checkpoint/i.test(j.message || '')) ? 'IG_LOGIN' : 'IG_NONE ' + (j.message || ''));
+  const det = t => ` [${r.status}] ${String(t || '').replace(/\s+/g, ' ').slice(0, 90)}`;
+  let j; try { j = JSON.parse(r.body); } catch (e) { throw new Error((r.status === 429 ? 'IG_RATE' : (r.status === 401 || r.status === 403 || /login|<html/i.test(r.body || '')) ? 'IG_LOGIN' : 'IG_HTTP') + det(r.body)); }
+  if (j.status === 'fail' || j.require_login) throw new Error(((r.status === 429 || /wait|few minutes/i.test(j.message || '')) ? 'IG_RATE' : (j.require_login || /login|checkpoint/i.test(j.message || '')) ? 'IG_LOGIN' : 'IG_NONE') + det(j.message || (j.require_login ? 'require_login' : '')));
   return j;
 }
 function igParse(it) {
@@ -150,12 +152,13 @@ const cookieOk = key => { if (!key || !S.cookies) return false; const c = jcall(
 // 把 yt-dlp 的英文錯誤翻成白話
 function friendly(m, site) {
   m = String(m || '');
-  if (/IG_LOGIN/.test(m)) return 'IG 需要你的 sessionid：到「平台」頁 → Instagram 按「貼代碼」貼上。如果之前貼過，可能過期了，重新貼一次。';
+  const igDet = (m.match(/\[\d+\][^]*$/) || [''])[0].trim();
+  if (/IG_LOGIN/.test(m)) return 'IG 不認這組登入資料。到「平台」→ Instagram：按「重貼」貼新的 sessionid；或按「登出」後用「App 內登入」。' + (igDet ? `（IG 回應 ${igDet}）` : '');
   if (/IG_RATE/.test(m)) return 'IG 暫時擋住了（太頻繁），等幾分鐘再試。';
   if (/IG_SHELL/.test(m)) return 'IG 的照片和帳號瀏覽要外殼 YTD_V0.1.07 以上，請先更新外殼。';
   if (/IG_URL/.test(m)) return '看不懂這個 IG 網址。請用貼文、Reels、限時動態或個人頁的連結。';
   if (/IG_NOUSER/.test(m)) return '找不到這個 IG 帳號，確認帳號名稱有沒有打對。';
-  if (/IG_(NONE|HTTP)/.test(m)) return 'IG 沒有回傳內容（可能是私人帳號、貼文被刪，或登入過期要重新登入）。';
+  if (/IG_(NONE|HTTP)/.test(m)) return 'IG 沒有回傳內容（可能是私人帳號、貼文被刪，或登入過期要重新登入）。' + (igDet ? `（IG 回應 ${igDet}）` : '');
   if (site === 'YouTube' && /Requested format is not available|Only images are available|n challenge|JavaScript runtime/i.test(m)) {
     const c = jcall('coreState') || {};
     return c.js ? 'YouTube 沒給影片格式。先到 設定 → 更新下載核心（可換測試版），再試一次。' : 'YouTube 要 JavaScript 引擎才下載得了，請裝外殼 YTD_V0.1.05 以上的 APK。';
@@ -670,7 +673,7 @@ function drawSites() {
     return `<div class="site" data-i="${i}"><span class="badge">${esc(s.ab)}</span>
       <span class="site-b" data-a="home"><span class="site-n">${esc(s.k)}</span> <span class="lv ${s.lv}">${s.lv === 'g' ? '穩定' : '有時失敗'}</span>
       ${logged ? `<span class="ok-t"> · 已登入 ${fmtTime(c.time)}</span>` : ''}<span class="site-d" style="display:block">${esc(s.note)}</span></span>
-      <span class="site-acts">${s.ck && canLogin ? (logged ? '<button class="btn sm ghost" data-a="logout" type="button">登出</button>' : (s.codeOnly ? '<button class="btn sm" data-a="code" type="button">貼代碼</button>' : '<button class="btn sm" data-a="login" type="button">登入</button><button class="btn sm ghost" data-a="code" type="button">貼代碼</button>')) : ''}</span></div>
+      <span class="site-acts">${s.ck && canLogin ? (logged ? '<button class="btn sm ghost" data-a="code" type="button">重貼</button><button class="btn sm ghost" data-a="logout" type="button">登出</button>' : (s.codeOnly ? '<button class="btn sm" data-a="code" type="button">貼代碼</button><button class="btn sm ghost" data-a="login" type="button">App 內登入</button>' : '<button class="btn sm" data-a="login" type="button">登入</button><button class="btn sm ghost" data-a="code" type="button">貼代碼</button>')) : ''}</span></div>
       ${codeFor === i ? `<div class="codebox" data-i="${i}"><span class="mut small">${CK_CODE[s.ck] ? `電腦瀏覽器登入 ${esc(s.k)} → 按 F12 → Application（應用程式）→ 左邊 Cookies → 找到 <b>${CK_CODE[s.ck]}</b>，複製它的 Value 貼到這裡。也可以貼整串「名稱=值; 名稱=值」。` : `電腦瀏覽器登入 ${esc(s.k)} → 按 F12 → Network → 點任一個請求 → 把 Cookie 那一整串貼到這裡（名稱=值; 名稱=值）。`}</span>
         <input id="codeIn" type="text" autocomplete="off" spellcheck="false" placeholder="${CK_CODE[s.ck] ? '貼上 ' + CK_CODE[s.ck] + ' 的值' : '貼上整串 Cookie'}">
         <div class="row"><button class="btn sm primary" data-a="codeSave" type="button">儲存</button><button class="btn sm ghost" data-a="codeNo" type="button">取消</button></div></div>` : ''}`;
@@ -684,7 +687,7 @@ $('#sites').onclick = e => {
   if (b.dataset.a === 'codeNo') { codeFor = -1; drawSites(); return; }
   if (b.dataset.a === 'codeSave') { if (saveCode(s, $('#codeIn').value)) { codeFor = -1; drawSites(); toast(`${s.k} 的登入資料已儲存`); } return; }
   if (b.dataset.a === 'home') { if (has('browse')) N.browse(s.home, 'browse', '', ''); else call('openUrl', s.home); }
-  else if (b.dataset.a === 'login') { N.browse(s.login, 'login', s.ck, s.dom); toast('登入後按右上角「完成登入」', 3500); }
+  else if (b.dataset.a === 'login') { N.browse(s.codeOnly ? s.home : s.login, 'login', s.ck, s.dom); toast(s.codeOnly ? '看到自己的帳號後，按右上角「完成登入」' : '登入後按右上角「完成登入」', 4500); }
   else if (b.dataset.a === 'logout') { N.clearCookies(s.ck); drawSites(); toast(`${s.k} 已登出`); }
 };
 function saveCode(s, text) {

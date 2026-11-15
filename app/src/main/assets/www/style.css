@@ -237,3 +237,4 @@ body.locked{overflow:hidden}
 @media (prefers-reduced-motion:reduce){.p-top,.p-mid,.p-bot{transition:none}}
 .tbtn{width:112px}
 .tbtn .thumb{width:100%;max-width:none}
+.site-acts{flex-wrap:wrap;justify-content:flex-end;max-width:46%}
