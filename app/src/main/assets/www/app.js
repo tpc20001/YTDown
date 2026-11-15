@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.37';
+const UI_VER = 'YTD_UI_V0.1.38';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.38', ['Telegram 登入後不再先預覽，貼上就直接下載', '預覽失敗不再顯示紅字（只有需要你處理的，例如要登入，才會提示）', '回到 App 時多讀幾次剪貼簿，平板上也能穩定自動下載']],
   ['YTD_V0.1.10（外殼）／YTD_UI_V0.1.37', ['修正：Telegram 登入一直卡在「連線到 Telegram 中…」']],
   ['YTD_UI_V0.1.36', ['「相容格式優先」：同樣的解析度優先抓 H.264（幾乎所有手機、平板都能播），沒有才依序退到 VP9、最後才是 AV1', '聲音優先抓 AAC（m4a）']],
   ['YTD_UI_V0.1.35', ['預設避開 AV1 格式（很多手機解不了，App 內播放器、相簿會播不出來），改抓 VP9／H.264，畫質一樣', '影片在 App 裡播不了時，畫面上會直接出現「用其他 App 播」按鈕（例如 MX Player）']],
@@ -334,6 +335,7 @@ window.onBrowse = s => {
 function probeSpec(u, k) { const st = siteOf(u); return JSON.stringify({ args: [...(triesFor(u)[k] || []), ['--ignore-no-formats-error']], cookies: cookieOk(st.ck) ? st.ck : '' }); }
 function probe(u, k) {
   probeUrl = u; probeK = k; probeId = 'p' + Date.now();
+  if (siteOf(u).k === 'Telegram' && has('tgJob') && tgReady()) { info = { ok: true, url: u, title: 'Telegram 貼文', heights: [], tg: true }; drawPreview(); drawQual(); return; }   // 走帳號下載，不用預覽
   info = { loading: true, url: u }; drawPreview(); drawQual();
   if (siteOf(u).k === 'Instagram' && has('http')) {
     const me = probeId, un = igUserOf(u);
@@ -359,6 +361,7 @@ window.onInfo = s => {
   }
   if (p.id !== probeId) return;
   if (!p.ok && probeK + 1 < triesFor(probeUrl).length) { probe(probeUrl, probeK + 1); return; }
+  if (!p.ok && !/IG_|TG_|Sign in|login|log in|cookies|Private|unavailable|removed|geo|country|members|會員|JavaScript runtime|Unsupported URL/i.test(p.msg || '')) { info = null; drawPreview(); drawQual(); return; }   // 一般的預覽失敗：不顯示，直接下載就好
   info = p.ok ? Object.assign(p, { url: probeUrl, k: probeK }) : { err: friendly(p.msg, siteOf(probeUrl).k), url: probeUrl };
   if (p.ok && p.isList) sel.playlist = S.playlist;
   sel.chapters = false;
@@ -370,7 +373,8 @@ function drawPreview() {
   if (!info) { el.hidden = true; el.innerHTML = ''; return; }
   el.hidden = false;
   if (info.loading) { el.innerHTML = `<div class="thumb"></div><div class="pv-b" style="flex:1"><div class="skel" style="width:90%"></div><div class="skel" style="width:60%"></div><div class="pv-m">解析中…</div></div>`; return; }
-  if (info.err) { el.innerHTML = `<div class="pv-b"><div class="pv-err">解析失敗：${esc(info.err)}</div><div class="pv-m">還是可以直接按下載試試看。<button class="link" type="button" id="reProbe">再解析一次</button></div></div>`; $('#reProbe').onclick = () => probe(info.url, 0); return; }
+  if (info.err) { el.innerHTML = `<div class="pv-b"><div class="pv-err">${esc(info.err)}</div><div class="pv-m">還是可以直接按下載試試看。<button class="link" type="button" id="reProbe">再解析一次</button></div></div>`; $('#reProbe').onclick = () => probe(info.url, 0); return; }
+  if (info.tg) { el.innerHTML = `<div class="pv-b"><div class="pv-t">Telegram 貼文</div><div class="pv-m"><span class="badge">TG</span><span class="ok-t">已登入，會用你的帳號下載</span></div></div>`; return; }
   if (info.profile) { el.innerHTML = `<div class="pv-b"><div class="pv-t">@${esc(info.profile)} 的 IG</div><div class="pv-m"><span class="badge">IG</span><span>可以看他的所有貼文，勾選後一次下載</span></div></div>`; return; }
   const st = siteOf(info.url);
   const noFmt = st.k === 'YouTube' && !info.isList && (!info.heights || !info.heights.length);
@@ -460,7 +464,12 @@ function checkClip() {
   if (S.autoDl && siteOf(u) !== OTHER && !igUserOf(u)) { autoGo(u); toast('已自動開始下載（' + siteOf(u).k + '）', 3000); return; }
   if (S.clip) askClip(u, false);
 }
-window.onResume = () => { setTimeout(checkClip, 450); refreshEnv(); pump(); autoCheck(false); };
+// 回到 App 時，系統可能還沒把剪貼簿交給我們，所以分幾次讀
+let clipTimers = [];
+function clipSoon() { clipTimers.forEach(clearTimeout); clipTimers = [300, 900, 1800, 3000].map(ms => setTimeout(checkClip, ms)); }
+window.onResume = () => { clipSoon(); refreshEnv(); pump(); autoCheck(false); };
+window.addEventListener('focus', clipSoon);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) clipSoon(); });
 $('#clipAdd').onclick = () => { if (clipDup) { autoGo(clipU); toast('再下載一次'); return; } LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
 $('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; };
 window.onShare = t => {
@@ -494,7 +503,7 @@ function enqueue(url, q, inf, x) {
   j.uploader = inf && inf.ok ? (inf.uploader || '') : ''; j.uid = (inf && (inf.uid || (inf.ig && inf.ig.uid))) || ''; j.igData = (inf && inf.ig) || null; j.bulk = !!x.bulk;
   if (inf && inf.ok && inf.heights && inf.heights.length) j.res = resFor(q, inf.heights[0]);
   Q.unshift(j); drawCard(j); pump(); saveQ();
-  if (!(inf && inf.ok) && newShell() && q !== 'thumb' && st.k !== 'Instagram') N.probe('qi:' + j.id, url, probeSpec(url, 0));
+  if (!(inf && inf.ok) && newShell() && q !== 'thumb' && st.k !== 'Instagram' && !(st.k === 'Telegram' && tgReady())) N.probe('qi:' + j.id, url, probeSpec(url, 0));
 }
 const running = () => Q.filter(j => j.state === 'run').length;
 let netWait = false;
@@ -1441,7 +1450,7 @@ $('#dlOpts').hidden = !currentUrls().length;
 restore(); drawStage(); infoLine(); pump();
 { const p = LS('page'); if (p && PAGES.includes(p) && p !== 'dl') page(p); }
 setTimeout(() => { if (S.autoCore && has('updateCore') && Date.now() - (LS('coreAt') || 0) > 20 * 3600e3) { $('#coreMsg').textContent = '自動更新中…'; if (has('updateCoreCh')) N.updateCoreCh(S.channel); else N.updateCore(); } }, 1500);
-setTimeout(checkClip, 600);
+clipSoon();
 setTimeout(() => autoCheck(true), 3000);
 
 // 瀏覽器預覽時放示範資料，方便看排版
