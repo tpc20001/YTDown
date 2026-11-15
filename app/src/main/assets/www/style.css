@@ -244,3 +244,9 @@ body.locked{overflow:hidden}
 .upd-state.new{color:var(--acc)}
 #p_upd #bChk{background:var(--pri);color:var(--prifg);border-color:var(--pri);font-weight:700;font-size:15px;padding:11px 18px}
 .tab span{white-space:nowrap}
+
+/* ---- V0.1.23：紀錄裡多張攤開 ---- */
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:4px;margin:2px 0}
+.tile{position:relative;aspect-ratio:1;padding:0;border:0;border-radius:8px;overflow:hidden;background:#000;cursor:pointer}
+.tile img,.tile video{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
+.tile-k{position:absolute;left:4px;bottom:4px;font-size:10.5px;padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.65);color:#fff}

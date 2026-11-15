@@ -3,6 +3,7 @@ package com.golden.ytdown
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -83,7 +84,7 @@ object Engine {
     private fun cleanSub(s: String) = s.replace(Regex("[\\\\/:*?\"<>|]"), "").trim().take(40)
 
     /** dest：""＝手機的「下載/YTDown」；否則是使用者選的資料夾（content://…tree…） */
-    private fun publish(f: File, sub: String, dest: String): JSONObject {
+    private fun publish(f: File, sub: String, dest: String, gallery: String = ""): JSONObject {
         val mime = mimeOf(f.extension); val size = f.length()
         if (dest.isNotEmpty()) {
             val root = DocumentFile.fromTreeUri(ctx, Uri.parse(dest)) ?: throw Exception("存檔資料夾打不開，請到設定重選")
@@ -94,6 +95,28 @@ object Engine {
             f.delete()
             val shown = (root.name ?: "選的資料夾") + (if (sub.isNotEmpty()) "/$sub" else "") + "/" + (doc.name ?: f.name)
             return JSONObject().put("name", doc.name ?: f.name).put("path", shown).put("uri", doc.uri.toString()).put("size", size).put("mime", mime)
+        }
+        // 存到相簿：照片（和影片）放進 DCIM/YTDown，手機的相簿 App 才看得到
+        val isImg = mime.startsWith("image/"); val isVid = mime.startsWith("video/")
+        if ((gallery == "img" && isImg) || (gallery == "all" && (isImg || isVid))) {
+            val grel = Environment.DIRECTORY_DCIM + "/YTDown" + (if (sub.isNotEmpty()) "/$sub" else "")
+            if (Build.VERSION.SDK_INT >= 29) {
+                val col = if (isImg) MediaStore.Images.Media.EXTERNAL_CONTENT_URI else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                val cv = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, f.name); put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, grel); put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val uri = ctx.contentResolver.insert(col, cv) ?: throw Exception("存不進相簿")
+                ctx.contentResolver.openOutputStream(uri)!!.use { o -> f.inputStream().use { it.copyTo(o) } }
+                ctx.contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+                f.delete()
+                return JSONObject().put("name", f.name).put("path", "相簿/YTDown" + (if (sub.isNotEmpty()) "/$sub" else "") + "/" + f.name).put("uri", uri.toString()).put("size", size).put("mime", mime)
+            }
+            val d = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "YTDown" + (if (sub.isNotEmpty()) "/$sub" else "")); d.mkdirs()
+            val t = File(d, f.name); f.copyTo(t, true); f.delete()
+            MediaScannerConnection.scanFile(ctx, arrayOf(t.absolutePath), arrayOf(mime), null)
+            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", t)
+            return JSONObject().put("name", f.name).put("path", t.absolutePath).put("uri", uri.toString()).put("size", size).put("mime", mime)
         }
         val rel = "YTDown" + (if (sub.isNotEmpty()) "/$sub" else "")
         if (Build.VERSION.SDK_INT >= 29) {
@@ -111,10 +134,10 @@ object Engine {
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", t)
         return JSONObject().put("name", f.name).put("path", t.absolutePath).put("uri", uri.toString()).put("size", size).put("mime", mime)
     }
-    private fun publishAll(dir: File, sub: String, dest: String, byName: Boolean = false): JSONArray {
+    private fun publishAll(dir: File, sub: String, dest: String, byName: Boolean = false, gallery: String = ""): JSONArray {
         val out = JSONArray(); val skip = setOf("part", "ytdl", "json", "temp", "tmp")
         val all = dir.walkTopDown().filter { it.isFile && it.length() > 0 && it.extension.lowercase() !in skip }
-        (if (byName) all.sortedBy { it.name } else all.sortedByDescending { it.length() }).forEach { out.put(publish(it, sub, dest)) }
+        (if (byName) all.sortedBy { it.name } else all.sortedByDescending { it.length() }).forEach { out.put(publish(it, sub, dest, if (dest.isEmpty()) gallery else "")) }
         return out
     }
 
@@ -176,7 +199,7 @@ object Engine {
                     val j = JSONObject().put("id", id).put("pct", p.toDouble()).put("eta", eta).put("line", line).toString()
                     live[id] = j; emit("onProg", j)
                 }
-                val files = publishAll(dir, sub, dest)
+                val files = publishAll(dir, sub, dest, false, o.optString("gallery", ""))
                 if (files.length() == 0) throw Exception("沒有產生檔案")
                 emit("onDone", JSONObject().put("id", id).put("ok", true).put("files", files).put("file", files.getJSONObject(0).getString("path")).toString())
                 if (notify) Notify.done(ctx, title.ifEmpty { files.getJSONObject(0).getString("name") }, true)
@@ -219,7 +242,7 @@ object Engine {
                         }
                     }
                 }
-                val files = publishAll(dir, sub, dest, true)
+                val files = publishAll(dir, sub, dest, true, o.optString("gallery", ""))
                 if (files.length() == 0) throw Exception("沒有產生檔案")
                 emit("onDone", JSONObject().put("id", id).put("ok", true).put("files", files).put("file", files.getJSONObject(0).getString("path")).toString())
                 if (notify) Notify.done(ctx, title.ifEmpty { files.getJSONObject(0).getString("name") }, true)

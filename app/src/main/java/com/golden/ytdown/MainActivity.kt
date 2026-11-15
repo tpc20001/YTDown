@@ -49,7 +49,7 @@ import java.util.zip.ZipInputStream
  */
 class MainActivity : AppCompatActivity() {
     companion object {
-        const val SHELL = "YTD_V0.1.07"
+        const val SHELL = "YTD_V0.1.08"
         const val ACTION_PASTE = "com.golden.ytdown.PASTE"
         const val ACTION_BROWSE = "com.golden.ytdown.BROWSE"
     }

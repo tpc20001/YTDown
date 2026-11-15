@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.22';
+const UI_VER = 'YTD_UI_V0.1.23';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,8 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.23', ['照片可以直接存到手機相簿（設定 → 存到相簿：關／只有照片／照片和影片）', '紀錄裡一則貼文有很多張時，全部攤開顯示，點哪張就看哪張', 'IG 帳號瀏覽改得更保守：一次只載入 12 則（跟 IG 網頁一樣），不再先查帳號資料', 'IG 擋住時會顯示 IG 實際回了什麼']],
+  ['YTD_V0.1.08（外殼）', ['照片、影片可以存進相簿（DCIM/YTDown）']],
   ['YTD_UI_V0.1.22', ['新增「更新」分頁：檢查更新、更新下載核心、每一版改了什麼，都集中在這裡', '有新版本時，「更新」分頁上會出現「新」的標記']],
   ['YTD_UI_V0.1.21', ['平台頁：已登入的網站多了「重貼」，可以直接換新的代碼', 'IG、FB 多了「App 內登入」當備用（如果你已經在 App 的瀏覽器裡登入過，按一下就能沿用）', 'IG 登入失敗時會顯示 IG 實際回了什麼，方便找原因']],
   ['YTD_UI_V0.1.20', ['Instagram、Facebook 改成只用「貼代碼」登入（不在 App 裡輸入帳號密碼，避開 Meta 的驗證和鎖帳號風險）', 'IG 慢慢下載：一次只抓一則、每則隔幾秒、每 20 則休息 2～4 分鐘（設定可關）', 'IG 帳號瀏覽載入貼文時也放慢', '支援平台加上 Telegram（公開頻道貼文）']],
@@ -61,7 +63,7 @@ const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 // ---------- 設定
 const DEF = { quality: 'best', conc: 2, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
   auto: true, autoUpd: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
-  igSlow: true, wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
+  igSlow: true, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
 let S = Object.assign({}, DEF, LS('set') || {});
 const saveS = () => LS('set', S);
 const QUALS = [['best', '最好'], ['2160', '4K'], ['1440', '2K'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['audio', 'M4A', '只要聲音'], ['mp3', 'MP3', '只要聲音'], ['thumb', '封面圖', '只抓圖']];
@@ -140,7 +142,7 @@ function igParse(it) {
   }).filter(Boolean);
   const cover = list[0].image_versions2 && list[0].image_versions2.candidates;
   const nv = items.filter(x => x.video).length, np = items.length - nv;
-  return { user, cap, code, items, nv, np, t: (it.taken_at || 0) * 1000, thumb: (best(cover) || {}).url || '', small: (small(cover) || {}).url || '',
+  return { user, uid: String((it.user && (it.user.pk || it.user.id)) || ''), cap, code, items, nv, np, t: (it.taken_at || 0) * 1000, thumb: (best(cover) || {}).url || '', small: (small(cover) || {}).url || '',
     title: cap ? cap.slice(0, 80) : `${user} 的貼文`, sum: [np ? np + ' 張照片' : '', nv ? nv + ' 部影片' : ''].filter(Boolean).join('、') };
 }
 async function igFetch(u) { const k = igCode(u); if (!k) throw new Error('IG_URL'); const j = await igGet(`media/${k.pk || igPk(k.code)}/info/`); const it = j.items && j.items[0]; if (!it) throw new Error('IG_NONE'); return igParse(it); }
@@ -154,8 +156,9 @@ const cookieOk = key => { if (!key || !S.cookies) return false; const c = jcall(
 function friendly(m, site) {
   m = String(m || '');
   const igDet = (m.match(/\[\d+\][^]*$/) || [''])[0].trim();
+  if (/IG_RATE/.test(m)) return 'IG 暫時擋住了（太頻繁），等 10 分鐘以上再試。' + (igDet ? `（IG 回應 ${igDet}）` : '');
   if (/IG_LOGIN/.test(m)) return 'IG 不認這組登入資料。到「平台」→ Instagram：按「重貼」貼新的 sessionid；或按「登出」後用「App 內登入」。' + (igDet ? `（IG 回應 ${igDet}）` : '');
-  if (/IG_RATE/.test(m)) return 'IG 暫時擋住了（太頻繁），等幾分鐘再試。';
+
   if (/IG_SHELL/.test(m)) return 'IG 的照片和帳號瀏覽要外殼 YTD_V0.1.07 以上，請先更新外殼。';
   if (/IG_URL/.test(m)) return '看不懂這個 IG 網址。請用貼文、Reels、限時動態或個人頁的連結。';
   if (/IG_NOUSER/.test(m)) return '找不到這個 IG 帳號，確認帳號名稱有沒有打對。';
@@ -422,7 +425,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -431,7 +434,7 @@ function enqueue(url, q, inf, x) {
     playlist: !!(inf && inf.isList && sel.playlist), subs: !!(sel.subs && !['audio', 'mp3', 'thumb'].includes(q)), embed: !!(sel.embed && q !== 'thumb'),
     sponsor: !!(x.sponsor && st.k === 'YouTube' && q !== 'thumb'), chapters: !!(x.chapters && q !== 'thumb'), section: x.section || '',
     k: inf && inf.ok ? (inf.k || 0) : 0, state: 'wait', pct: 0, t: Date.now() };
-  j.uploader = inf && inf.ok ? (inf.uploader || '') : ''; j.igData = (inf && inf.ig) || null; j.bulk = !!x.bulk;
+  j.uploader = inf && inf.ok ? (inf.uploader || '') : ''; j.uid = (inf && (inf.uid || (inf.ig && inf.ig.uid))) || ''; j.igData = (inf && inf.ig) || null; j.bulk = !!x.bulk;
   if (inf && inf.ok && inf.heights && inf.heights.length) j.res = resFor(q, inf.heights[0]);
   Q.unshift(j); drawCard(j); pump(); saveQ();
   if (!(inf && inf.ok) && newShell() && q !== 'thumb' && st.k !== 'Instagram') N.probe('qi:' + j.id, url, probeSpec(url, 0));
@@ -487,10 +490,10 @@ async function igStart(j) {
     const d = j.igData || await igFetch(j.url);
     if (!j.igWait) return;                       // 等的時候被取消了
     j.igWait = false; j.stage = '';
-    if (!j.title) j.title = d.title; if (!j.thumb) j.thumb = d.thumb; j.uploader = d.user || j.uploader; j.res = 0;
+    if (!j.title) j.title = d.title; if (!j.thumb) j.thumb = d.thumb; j.uploader = d.user || j.uploader; j.uid = d.uid || j.uid || ''; j.res = 0;
     const el = document.getElementById(j.id); if (el) el.dataset.st = '';
     drawCard(j);
-    N.fetchJob(JSON.stringify({ id: j.pid, items: d.items.map(x => ({ url: x.url, name: x.name })), sub: S.subdir ? 'Instagram' : '', dest: S.dest && S.dest.uri ? S.dest.uri : '', title: j.title, notify: S.notify && !j.bulk, headers: { Referer: 'https://www.instagram.com/' } }));
+    N.fetchJob(JSON.stringify({ id: j.pid, items: d.items.map(x => ({ url: x.url, name: x.name })), sub: S.subdir ? 'Instagram' : '', dest: S.dest && S.dest.uri ? S.dest.uri : '', gallery: S.gallery === 'off' ? '' : S.gallery, title: j.title, notify: S.notify && !j.bulk, headers: { Referer: 'https://www.instagram.com/' } }));
   } catch (e) {
     if (!j.igWait) return; j.igWait = false;
     const m = String(e.message || e);
@@ -504,7 +507,7 @@ function startJob(j) {
   const st = siteOf(j.url);
   const spec = { id: j.pid, url: j.url, mode: j.q === 'thumb' ? 'none' : j.q, args: argsFor(j), sub: S.subdir ? j.site : '', playlist: j.playlist,
     tpl: (j.playlist ? '%(playlist_index|)s ' : '') + (TPL_STR[S.tpl] || TPL_STR.title), title: j.title, notify: S.notify,
-    dest: S.dest && S.dest.uri ? S.dest.uri : '', cookies: cookieOk(st.ck) ? st.ck : '', aria2: !!(S.aria && !j.section && !j.chapters) };
+    dest: S.dest && S.dest.uri ? S.dest.uri : '', gallery: S.gallery === 'off' ? '' : S.gallery, cookies: cookieOk(st.ck) ? st.ck : '', aria2: !!(S.aria && !j.section && !j.chapters) };
   drawCard(j); saveQ();
   if (has('job')) N.job(JSON.stringify(spec));
   else if (has('downloadEx')) N.downloadEx(j.pid, j.url, spec.mode, JSON.stringify(spec.args));
@@ -613,10 +616,11 @@ function restore() {
 let codeFor = -1;
 let hFilter = '全部', hAsk = -1, hShow = 100;
 const szOf = h => (h.files || []).reduce((a, x) => a + (+x.size || 0), 0);
+const mediaOf = files => (files || []).filter(f => f && f.uri && /^(video|audio|image)\//.test(mimeOf(f)));
 const hThumb = h => { const f = !h.gone && (h.files || []).find(x => /^image\//.test(x.mime || '')); return f ? f.uri : h.thumb; };   // 照片用自己的檔當縮圖，不會過期
 function saveHist(j) {
   const H = LS('hist') || [];
-  H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: j.res || 0, uploader: j.uploader || '', ok: j.state === 'ok', msg: j.msg, files: (j.files || []).slice(0, 20) });
+  H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: j.res || 0, uploader: j.uploader || '', uid: j.uid || '', ok: j.state === 'ok', msg: j.msg, files: (j.files || []).slice(0, 20) });
   LS('hist', H.slice(0, 1500));
 }
 function drawHist() {
@@ -633,9 +637,12 @@ function drawHist() {
   $('#bHClr').hidden = !H.length;
   $('#hist').innerHTML = L.length ? L.slice(0, hShow).map(h => {
     const f = h.files && h.files[0], total = szOf(h);
-    return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}" data-i="${h.i}"><button class="tbtn" type="button" data-a="open" aria-label="播放">${thumbImg(hThumb(h))}</button><div class="cb">
+    const M = h.ok && !h.gone ? mediaOf(h.files) : [], multi = M.length > 1;
+    const strip = multi ? `<div class="strip">${M.slice(0, 40).map((x, n) => `<button class="tile" type="button" data-a="openAt" data-n="${n}" aria-label="第 ${n + 1} 個">${mimeOf(x).startsWith('image/') ? `<img src="${esc(x.uri)}" alt="" loading="lazy">` : mimeOf(x).startsWith('video/') ? `<video src="${esc(x.uri)}#t=0.5" preload="metadata" muted playsinline></video><span class="tile-k">影片</span>` : '<span class="tile-k">聲音</span>'}</button>`).join('')}${M.length > 40 ? `<span class="mut small">還有 ${M.length - 40} 個</span>` : ''}</div>` : '';
+    return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}${multi ? ' multi' : ''}" data-i="${h.i}">${multi ? '' : `<button class="tbtn" type="button" data-a="open" aria-label="播放">${thumbImg(hThumb(h))}</button>`}<div class="cb">
       <div class="ct">${esc(h.title || h.u)}</div>
       <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span>${h.uploader ? `<button class="link who" type="button" data-a="who">${esc((h.site === 'Instagram' ? '@' : '') + h.uploader)}</button>` : ''}<span>${fmtTime(h.t)}</span><span>${esc(qShow(h.q || 'best', h.res))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}</div>
+      ${strip}
       ${h.gone ? '<div class="st mut">檔案已刪除</div>' : h.ok ? '' : `<div class="st">${esc(h.msg || '失敗')}</div>`}
       ${hAsk === h.i ? `<div class="ask"><span>刪掉手機裡的檔案？刪了就找不回來。</span><button class="btn sm danger" data-a="delYes" type="button">刪掉</button><button class="btn sm ghost" data-a="delNo" type="button">取消</button></div>` : ''}
       <div class="acts">${h.ok && f && !h.gone ? '<button class="btn" data-a="open" type="button">播放</button><button class="btn ghost" data-a="share" type="button">分享</button>' : ''}<button class="btn ghost" data-a="again" type="button">再下載</button><button class="btn ghost" data-a="copy" type="button">複製連結</button>${h.ok && f && !h.gone && has('deleteFile') ? '<button class="btn ghost" data-a="delFile" type="button">刪檔案</button>' : ''}<button class="btn ghost" data-a="del" type="button">刪紀錄</button></div>
@@ -648,7 +655,8 @@ $('#hist').onclick = e => {
   const i = +b.closest('.card').dataset.i, H = LS('hist') || [], h = H[i]; if (!h) return;
   const a = b.dataset.a, f = (h.files || [])[0];
   if (a === 'open') { if (h.ok && !h.gone && f) playF(h.files, h.title); }
-  else if (a === 'who') { if (h.site === 'Instagram' && has('http')) openIg(h.uploader); else { $('#hSearch').value = h.uploader; hShow = 100; drawHist(); window.scrollTo(0, 0); } }
+  else if (a === 'openAt') playF(h.files, h.title, +b.dataset.n);
+  else if (a === 'who') { if (h.site === 'Instagram' && has('http')) openIg(h.uploader, h.uid); else { $('#hSearch').value = h.uploader; hShow = 100; drawHist(); window.scrollTo(0, 0); } }
   else if (a === 'share') shareF(f);
   else if (a === 'again') { page('dl'); addUrls(h.u); }
   else if (a === 'copy') copyText(h.u);
@@ -732,6 +740,8 @@ function drawSet() {
   chipsInto($('#sTpl'), TPLS, S.tpl, v => { S.tpl = v; saveS(); drawSet(); });
   chipsInto($('#sTheme'), [['auto', '跟隨系統'], ['dark', '深色'], ['light', '淺色']], S.theme, v => { S.theme = v; saveS(); applyTheme(); drawSet(); });
   chipsInto($('#sChannel'), [['stable', '穩定版'], ['nightly', '測試版', '修得最快']], S.channel, v => { S.channel = v; saveS(); drawSet(); });
+  chipsInto($('#sGallery'), [['off', '關'], ['img', '只有照片'], ['all', '照片和影片']], S.gallery, v => { S.gallery = v; saveS(); drawSet(); });
+  $('#galNote').textContent = verNum(call('shellVer')) < 108 && N ? '要外殼 V0.1.08 以上才有用，請先到「更新」裝新外殼' : (S.dest && S.dest.uri ? '你有自己選存檔資料夾，所以這個設定不會用到' : '會存到相簿的 YTDown' + (S.subdir ? '／平台名稱' : '') + '，其他檔案照舊存到「下載」');
   $('#concV').textContent = S.conc;
   $('#destName').textContent = S.dest && S.dest.uri ? '目前：' + S.dest.name + (has('treeOk') && !N.treeOk(S.dest.uri) ? '（不能用了，請重選）' : '') : '目前：手機的「下載/YTDown」';
   bindSw('#sSubdir', 'subdir'); bindSw('#sPlaylist', 'playlist', () => sel.playlist = S.playlist);
@@ -882,26 +892,27 @@ async function igMore() {
   IGP.loading = true; $('#igMore').disabled = true; $('#igMsg').textContent = '載入中…';
   const me = IGP.user; let msg = '';
   try {
-    if (!IGP.uid || !IGP.total) {
-      try { const j = await igGet('users/web_profile_info/?username=' + encodeURIComponent(me)); const u = j.data && j.data.user; if (u) { IGP.uid = u.id; IGP.total = (u.edge_owner_to_timeline_media && u.edge_owner_to_timeline_media.count) || 0; IGP.priv = !!(u.is_private && !u.followed_by_viewer); } }
-      catch (e) { if (!IGP.uid) throw e; }
+    if (!IGP.uid) {     // 先用搜尋找帳號編號（比較不會被擋），找不到才查帳號資料
+      try { const j = await igGet('web/search/topsearch/?context=user&query=' + encodeURIComponent(me)); const u = (j.users || []).map(x => x.user).find(x => x && String(x.username).toLowerCase() === me.toLowerCase()); if (u) IGP.uid = String(u.pk || u.pk_id || ''); } catch (e) { if (/IG_(LOGIN|RATE)/.test(String(e.message))) throw e; }
+      if (!IGP.uid) { await sleep(1500); const j = await igGet('users/web_profile_info/?username=' + encodeURIComponent(me)); const u = j.data && j.data.user; if (u) { IGP.uid = u.id; IGP.total = (u.edge_owner_to_timeline_media && u.edge_owner_to_timeline_media.count) || 0; IGP.priv = !!(u.is_private && !u.followed_by_viewer); } }
       if (!IGP.uid) throw new Error('IG_NOUSER');
+      await sleep(1200 + Math.random() * 800);
     }
     const done = new Set((LS('hist') || []).filter(h => h.ok && !h.gone && h.site === 'Instagram').map(h => (igCode(h.u) || {}).code));
     let added = 0;
-    while (added < 100 && IGP.more) {
-      const j = await igGet(`feed/user/${IGP.uid}/?count=33` + (IGP.next ? '&max_id=' + encodeURIComponent(IGP.next) : ''));
+    while (added < 1 && IGP.more) {          // 一次只問 IG 一頁（12 則），跟網頁往下滑一樣
+      const j = await igGet(`feed/user/${IGP.uid}/?count=12` + (IGP.next ? '&max_id=' + encodeURIComponent(IGP.next) : ''));
       if (IGP.user !== me) return;
       const batch = (j.items || []).map(igParse).filter(p => p.items.length && !IGP.posts.some(x => x.code === p.code));
       batch.forEach(p => { p.had = done.has(p.code); IGP.posts.push(p); if (!p.had) IGP.sel.add(p.code); });
       igDraw(batch); added += batch.length;
       IGP.more = !!j.more_available && !!j.next_max_id; IGP.next = j.next_max_id || '';
       igStat(); $('#igMsg').textContent = `載入中… ${IGP.posts.length} 則`;
-      if (IGP.more && added < 100) await sleep(1500 + Math.random() * 1500);     // 慢一點，免得被 IG 擋
+      if (!batch.length) break;
     }
     msg = IGP.more ? '' : (IGP.posts.length ? '全部載入完了' : (IGP.priv ? '這是私人帳號，要先追蹤才看得到' : '這個帳號沒有貼文'));
   } catch (e) { msg = friendly(String(e.message || e)); }
-  finally { if (IGP.user === me) { IGP.loading = false; $('#igMore').disabled = false; $('#igMore').hidden = !IGP.more; $('#igMore').textContent = '繼續載入（再 100 則）'; $('#igMsg').textContent = msg; igStat(); } }
+  finally { if (IGP.user === me) { IGP.loading = false; $('#igMore').disabled = false; $('#igMore').hidden = !IGP.more; $('#igMore').textContent = '繼續載入（再 12 則）'; $('#igMsg').textContent = msg; igStat(); } }
 }
 function igDraw(batch) {
   $('#igGrid').insertAdjacentHTML('beforeend', batch.map(p => `<button class="ig-t${IGP.sel.has(p.code) ? ' on' : ''}" type="button" data-c="${esc(p.code)}" aria-pressed="${IGP.sel.has(p.code)}">${thumbImg(p.small, 'ig-i')}${p.nv || p.items.length > 1 ? `<span class="ig-k">${p.nv ? '影片' : ''}${p.items.length > 1 ? ' ' + p.items.length + ' 個' : ''}</span>` : ''}${p.had ? '<span class="ig-had">已下載</span>' : ''}<span class="ig-c"></span></button>`).join(''));
@@ -915,7 +926,7 @@ $('#igClose').onclick = () => igClose();
 $('#igDl').onclick = () => {
   const L = IGP.posts.filter(p => IGP.sel.has(p.code)); if (!L.length) return;
   const who = IGP.user;
-  L.forEach(p => enqueue(`https://www.instagram.com/p/${p.code}/`, 'best', { ok: true, title: p.title, thumb: p.thumb, uploader: p.user || who, ig: p, heights: [] }, { bulk: true }));
+  L.forEach(p => enqueue(`https://www.instagram.com/p/${p.code}/`, 'best', { ok: true, title: p.title, thumb: p.thumb, uploader: p.user || who, uid: p.uid || IGP.uid, ig: p, heights: [] }, { bulk: true }));
   igClose(); page('dl'); toast(`已加入 ${L.length} 則，會照順序下載`, 3500);
 };
 
@@ -929,7 +940,7 @@ const RATES = [1, 1.25, 1.5, 2, 0.5];
 function mimeGuess(n) { const e = (String(n || '').split('.').pop() || '').toLowerCase(); return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime', m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', ogg: 'audio/ogg', flac: 'audio/flac', wav: 'audio/wav', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic' })[e] || ''; }
 const mimeOf = f => (f && (f.mime && f.mime !== 'application/octet-stream' ? f.mime : mimeGuess(f.name))) || '';
 function playF(files, title, start) {
-  const L = (files || []).filter(f => f && f.uri && /^(video|audio|image)\//.test(mimeOf(f)));
+  const L = mediaOf(files);
   if (!L.length) { openF((files || [])[0]); return; }
   P.list = L; P.i = Math.max(0, Math.min(start || 0, L.length - 1)); P.title = title || '';
   pEl.hidden = false; document.body.classList.add('locked'); call('keepOn', true); call('immersive', true);
