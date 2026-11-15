@@ -94,6 +94,36 @@
     </div>
   </section>
 
+  <!-- 更新 -->
+  <section id="p_upd" class="pg">
+    <div class="secHead"><h2>更新</h2></div>
+    <div class="panel">
+      <div id="verAll" class="mut small mono"></div>
+      <div id="updState" class="upd-state">按下面的按鈕檢查有沒有新版本</div>
+    </div>
+    <div class="group" style="margin-top:12px"><h3>App 更新</h3>
+      <label class="item"><span>有新版本主動提醒<small>開 App、回到 App、每 30 分鐘檢查一次</small></span><input type="checkbox" class="sw" id="sAutoUpd"></label>
+      <div class="item col"><span>檢查更新<small>update.json 的網址，已經幫你填好 GitHub 的</small></span>
+        <input id="updUrl" type="url" placeholder="https://…/update.json" autocomplete="off">
+        <div class="row"><button class="btn sm" id="bChk" type="button">檢查更新</button><button class="btn sm primary" id="bReload" type="button" hidden>重新載入畫面</button><button class="btn sm primary" id="bApk" type="button" hidden>安裝新外殼</button></div>
+        <span id="updMsg" class="mut small"></span></div>
+      <div class="item col"><span>手動更新</span>
+        <div class="row"><button class="btn sm ghost" id="bPick" type="button">選畫面更新包（zip）</button><button class="btn sm ghost" id="bApkUrl" type="button">從網址裝 APK</button></div>
+        <input id="apkUrl" type="url" placeholder="APK 的網址" autocomplete="off" hidden>
+        <button class="link left" id="bResetUi" type="button">畫面壞掉？退回 App 內建的版本</button></div>
+    </div>
+    <div class="group"><h3>下載核心（yt-dlp）</h3>
+      <div class="item col"><span id="coreVer" class="mut small"></span><span class="mut small">網站改規則、下載一直失敗時按更新，不用重裝 App。穩定版不行就換測試版試試。</span>
+        <div id="sChannel" class="chips"></div>
+        <div class="row"><button class="btn sm" id="bCore" type="button">更新下載核心</button><span id="coreMsg" class="mut small"></span></div></div>
+      <label class="item"><span>每天自動更新一次</span><input type="checkbox" class="sw" id="sAutoCore"></label>
+      <div class="item col"><span>YouTube 失敗時依序換這些方式重試</span><div id="ytTries" class="mut small mono"></div></div>
+    </div>
+    <div class="group"><h3>每一版改了什麼</h3>
+      <div class="item col"><div id="log" class="log"></div></div>
+    </div>
+  </section>
+
   <!-- 設定 -->
   <section id="p_set" class="pg">
     <div class="group"><h3>下載</h3>
@@ -134,31 +164,12 @@
     <div class="group"><h3>外觀</h3>
       <div class="item col"><span>主題</span><div id="sTheme" class="chips"></div></div>
     </div>
-    <div class="group"><h3>下載核心（yt-dlp）</h3>
-      <div class="item col"><span id="coreVer" class="mut small"></span><span class="mut small">網站改規則、下載一直失敗時按更新，不用重裝 App。穩定版不行就換測試版試試。</span>
-        <div id="sChannel" class="chips"></div>
-        <div class="row"><button class="btn sm" id="bCore" type="button">更新下載核心</button><span id="coreMsg" class="mut small"></span></div></div>
-      <label class="item"><span>每天自動更新一次</span><input type="checkbox" class="sw" id="sAutoCore"></label>
-      <div class="item col"><span>YouTube 失敗時依序換這些方式重試</span><div id="ytTries" class="mut small mono"></div></div>
-    </div>
-    <div class="group"><h3>App 更新</h3>
-      <label class="item"><span>有新版本主動提醒<small>開 App、回到 App、每 30 分鐘檢查一次</small></span><input type="checkbox" class="sw" id="sAutoUpd"></label>
-      <div class="item col"><span>檢查更新<small>update.json 的網址，已經幫你填好 GitHub 的</small></span>
-        <input id="updUrl" type="url" placeholder="https://…/update.json" autocomplete="off">
-        <div class="row"><button class="btn sm" id="bChk" type="button">檢查更新</button><button class="btn sm primary" id="bReload" type="button" hidden>重新載入畫面</button><button class="btn sm primary" id="bApk" type="button" hidden>安裝新外殼</button></div>
-        <span id="updMsg" class="mut small"></span></div>
-      <div class="item col"><span>手動更新</span>
-        <div class="row"><button class="btn sm ghost" id="bPick" type="button">選畫面更新包（zip）</button><button class="btn sm ghost" id="bApkUrl" type="button">從網址裝 APK</button></div>
-        <input id="apkUrl" type="url" placeholder="APK 的網址" autocomplete="off" hidden>
-        <button class="link left" id="bResetUi" type="button">畫面壞掉？退回 App 內建的版本</button></div>
-    </div>
     <div class="group"><h3>備份</h3>
       <div class="item"><span>匯出設定和紀錄<small>存到 下載/YTDown</small></span><button class="btn sm ghost" id="bExport" type="button">匯出</button></div>
       <div class="item"><span>從備份還原</span><button class="btn sm ghost" id="bImport" type="button">選備份檔</button></div>
     </div>
-    <div class="group"><h3>關於</h3>
-      <div class="item col"><span id="verAll" class="mut small mono"></span></div>
-      <div class="item col"><span>更新紀錄</span><div id="log" class="log"></div></div>
+    <div class="group"><h3>其他</h3>
+      <div class="item"><span>版本和更新<small>移到下面的「更新」分頁了</small></span><button class="btn sm ghost" id="bGoUpd" type="button">前往</button></div>
       <div class="item"><button class="link" id="bReset" type="button">設定還原成預設</button></div>
     </div>
   </section>
@@ -168,6 +179,7 @@
   <button class="tab on" data-p="dl" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 19h14"/></svg><span>下載</span><i id="tabBadge" hidden></i></button>
   <button class="tab" data-p="hist" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M4 12a8 8 0 1 0 2.3-5.7M4 4v3h3"/></svg><span>紀錄</span></button>
   <button class="tab" data-p="sites" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v5H4zM13 14h7v5h-7z"/></svg><span>平台</span></button>
+  <button class="tab" data-p="upd" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V8m-4 4 4-4 4 4M5 5h14"/></svg><span>更新</span><i id="updBadge" hidden>新</i></button>
   <button class="tab" data-p="set" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>設定</span></button>
 </nav>
 <!-- IG 帳號瀏覽 -->

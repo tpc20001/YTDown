@@ -238,3 +238,9 @@ body.locked{overflow:hidden}
 .tbtn{width:112px}
 .tbtn .thumb{width:100%;max-width:none}
 .site-acts{flex-wrap:wrap;justify-content:flex-end;max-width:46%}
+
+/* ---- V0.1.22：更新分頁 ---- */
+.upd-state{font-size:15px;font-weight:600}
+.upd-state.new{color:var(--acc)}
+#p_upd #bChk{background:var(--pri);color:var(--prifg);border-color:var(--pri);font-weight:700;font-size:15px;padding:11px 18px}
+.tab span{white-space:nowrap}

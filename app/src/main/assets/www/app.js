@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.21';
+const UI_VER = 'YTD_UI_V0.1.22';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.22', ['新增「更新」分頁：檢查更新、更新下載核心、每一版改了什麼，都集中在這裡', '有新版本時，「更新」分頁上會出現「新」的標記']],
   ['YTD_UI_V0.1.21', ['平台頁：已登入的網站多了「重貼」，可以直接換新的代碼', 'IG、FB 多了「App 內登入」當備用（如果你已經在 App 的瀏覽器裡登入過，按一下就能沿用）', 'IG 登入失敗時會顯示 IG 實際回了什麼，方便找原因']],
   ['YTD_UI_V0.1.20', ['Instagram、Facebook 改成只用「貼代碼」登入（不在 App 裡輸入帳號密碼，避開 Meta 的驗證和鎖帳號風險）', 'IG 慢慢下載：一次只抓一則、每則隔幾秒、每 20 則休息 2～4 分鐘（設定可關）', 'IG 帳號瀏覽載入貼文時也放慢', '支援平台加上 Telegram（公開頻道貼文）']],
   ['YTD_UI_V0.1.19', ['Instagram：照片、影片、多張貼文、限時動態都能下載（要先在「平台」登入 IG）', 'IG 帳號瀏覽：搜尋帳號或貼上個人頁網址，一次載入 100 則、預設全勾、可以一次全部下載', '內建播放器：紀錄裡直接播放影片、看照片；左右滑快轉（滑越快跳越多、越慢越精準）、點兩下左右跳 10 秒、往下滑關閉、記住上次看到哪', '紀錄：可依日期、檔案大小、標題、作者排序；可搜尋作者（打一部分就找得到）；點作者看他的全部', '平台登入多了「貼代碼」：每個平台都能貼 Cookie 登入']],
@@ -189,13 +190,13 @@ function friendly(m, site) {
 }
 
 // ---------- 分頁
-const PAGES = ['dl', 'hist', 'sites', 'set'];
+const PAGES = ['dl', 'hist', 'sites', 'upd', 'set'];
 function page(p) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.p === p));
   document.querySelectorAll('.pg').forEach(s => s.classList.toggle('on', s.id === 'p_' + p));
   if (p === 'hist') drawHist();
   if (p === 'sites') drawSites();
-  if (p === 'set') drawSet();
+  if (p === 'set' || p === 'upd') drawSet();
   window.scrollTo(0, 0);
   LS('page', p);
 }
@@ -759,6 +760,7 @@ $('#bDestDef').onclick = () => { S.dest = null; saveS(); drawSet(); toast('改�
 $('#bOpenDir').onclick = () => { if (has('openFolder')) N.openFolder(S.dest && S.dest.uri ? S.dest.uri : ''); else toast('這版外殼不支援，請更新 APK'); };
 $('#bNotify').onclick = () => { if (env.notify === false && LS('askedNotify')) call('appSettings'); else { call('askNotify'); LS('askedNotify', 1); } setTimeout(drawSet, 1500); };
 $('#bBattery').onclick = () => call('askBatteryExempt');
+$('#bGoUpd').onclick = () => page('upd');
 $('#bReset').onclick = () => { const keep = { dest: S.dest }; S = Object.assign({}, DEF, keep); saveS(); sel = { q: S.quality, playlist: S.playlist, subs: S.subs, embed: S.embed, sponsor: S.sponsor, chapters: false }; applyTheme(); drawSet(); drawQual(); toast('設定已還原（存檔位置保留）'); };
 
 function drawVer() {
@@ -790,17 +792,23 @@ function autoCheck(force) {
     let j; try { j = JSON.parse(r.body); } catch (e) { return; }
     updInfo = { u, ui: j.ver || '', shell: j.shell || '', apk: j.apk ? new URL(j.apk, u).href : '' };
     LS('updInfo', updInfo); showUpd();
+    // 更新頁的按鈕：有新外殼就亮「安裝新外殼」
+    const i2 = updInfo; if (i2.shell && i2.apk && verNum(i2.shell) > verNum(call('shellVer'))) { apkHref = i2.apk; $('#bApk').hidden = false; $('#bApk').textContent = '安裝新外殼 ' + i2.shell.replace('YTD_', ''); }
   }), u);
 }
 function showUpd() {
-  const i = updInfo || LS('updInfo'), bar = $('#updBar'); if (!i) { bar.hidden = true; return; }
+  const i = updInfo || LS('updInfo'), bar = $('#updBar');
+  const setB = (hide, txt) => { bar.hidden = hide; $('#updBadge').hidden = !txt; $('#updState').textContent = txt ? '有新版本：' + txt : (i ? '目前是最新版' + (LS('updAt') ? '（' + fmtTime(LS('updAt')) + ' 檢查過）' : '') : '按下面的按鈕檢查有沒有新版本'); $('#updState').classList.toggle('new', !!txt); };
+  if (!i) { setB(true, ''); return; }
   const ui = i.ui && verNum(i.ui) > verNum(call('uiVer')) ? i.ui : '', sh = i.shell && i.apk && verNum(i.shell) > verNum(call('shellVer')) ? i.shell : '';
   const key = ui + '|' + sh;
-  if ((!ui && !sh) || LS('updSkip') === key) { bar.hidden = true; return; }
+  const label = [sh ? '外殼 ' + sh.replace('YTD_', '') : '', ui ? '畫面 ' + ui.replace('YTD_UI_', '') : ''].filter(Boolean).join('、');
+  if (!ui && !sh) { setB(true, ''); return; }
+  if (LS('updSkip') === key) { setB(true, label); return; }
   updInfo = i;
   $('#updTxt').textContent = [sh ? '外殼 ' + sh.replace('YTD_', '') : '', ui ? '畫面 ' + ui.replace('YTD_UI_', '') : ''].filter(Boolean).join('、');
   $('#updGo').textContent = sh ? '安裝' : '更新';
-  bar.dataset.key = key; bar.dataset.kind = sh ? 'apk' : 'ui'; bar.hidden = false;
+  bar.dataset.key = key; bar.dataset.kind = sh ? 'apk' : 'ui'; setB(false, label);
 }
 $('#updGo').onclick = () => {
   if ($('#updBar').dataset.kind === 'apk') getApk(updInfo.apk);
@@ -820,6 +828,7 @@ $('#bChk').onclick = () => {
     if (j.shell && j.apk && verNum(j.shell) > verNum(call('shellVer'))) { apkHref = new URL(j.apk, u).href; $('#bApk').hidden = false; $('#bApk').textContent = '安裝新外殼 ' + j.shell.replace('YTD_', ''); msgs.push('有新外殼 ' + j.shell); }
     if (j.ver && verNum(j.ver) > verNum(call('uiVer'))) { msgs.push('有新畫面 ' + j.ver + '，下載中…'); call('checkUpdate', u); }
     $('#updMsg').textContent = msgs.length ? msgs.join('；') : '都是最新的了';
+    LS('updAt', Date.now()); updInfo = { u, ui: j.ver || '', shell: j.shell || '', apk: j.apk ? new URL(j.apk, u).href : '' }; LS('updInfo', updInfo); LS('updSkip', ''); showUpd();
   });
   N.httpGet(id, u);
 };
