@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.33';
+const UI_VER = 'YTD_UI_V0.1.34';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.34', ['YouTube 多線加速：把影片切成很多小段，同時下載好幾段（預設 8 條，設定裡可調 4～16）', '多線下載失敗時，會自動改回一般方式再試一次']],
   ['YTD_UI_V0.1.33', ['YouTube 下載改成每次只要 10 MB 一段，減少被 YouTube 限速（大檔、4K 越到後面越慢的情況）']],
   ['YTD_UI_V0.1.32', ['Telegram：可以登入你自己的帳號（平台 → Telegram），網頁版拿不到的大影片、相簿也能下載', 'Telegram 沒登入、網頁版又沒提供時，錯誤訊息會直接說明']],
   ['YTD_V0.1.09（外殼）', ['加入 Telegram 官方的 TDLib，可以用自己的帳號登入下載']],
@@ -75,7 +76,7 @@ const triesFor = u => siteOf(u).k === 'YouTube' ? YT_TRIES : [[]];
 // ---------- 設定
 const DEF = { quality: 'best', conc: 2, subdir: true, playlist: false, tpl: 'title', subs: false, subLang: 'zh-Hant,zh-TW,zh,en', embed: true, sponsor: false,
   auto: true, autoUpd: true, autoDl: true, autoPlay: true, shareAuto: false, clip: true, cookies: true, notify: true, vibe: true, theme: 'auto', autoCore: true, channel: 'stable',
-  igSlow: true, ttHd: true, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
+  igSlow: true, ttHd: true, ytFast: true, ytConn: 8, gallery: 'img', wifi: false, aria: false, rate: '', proxy: '', args: '', dest: null, src: 'ytsearch' };
 let S = Object.assign({}, DEF, LS('set') || {});
 const saveS = () => LS('set', S);
 const QUALS = [['best', '最好'], ['2160', '4K'], ['1440', '2K'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['audio', 'M4A', '只要聲音'], ['mp3', 'MP3', '只要聲音'], ['thumb', '封面圖', '只抓圖']];
@@ -521,7 +522,17 @@ setInterval(() => { if (netWait) pump(); }, 20000);
 
 function argsFor(j) {
   const a = [...(triesFor(j.url)[j.k] || [])];
-  if (siteOf(j.url).k === 'YouTube' && !(S.aria && !j.section && !j.chapters)) a.push(YT_CHUNK);   // 開了 aria2 就交給它多線下載
+  const yt = siteOf(j.url).k === 'YouTube', viaAria = S.aria && !j.section && !j.chapters;
+  if (yt && !viaAria) {
+    if (S.ytFast && !j.noFast) {
+      // 多線：先把 YouTube 的檔案變成很多小段（formats=dashy），再同時抓好幾段（-N）
+      const i = a.findIndex(x => x[0] === '--extractor-args' && /^youtube:/.test(x[1]));
+      if (i >= 0) a[i] = ['--extractor-args', a[i][1] + ';formats=dashy']; else a.push(['--extractor-args', 'youtube:formats=dashy']);
+      a.push(['--concurrent-fragments', String(S.ytConn || 8)]);
+      j.fast = true;
+    } else j.fast = false;
+    a.push(YT_CHUNK);
+  }
   if (j.q === 'thumb') { a.push(['--skip-download'], ['--write-thumbnail'], ['--convert-thumbnails', 'jpg']); return a.concat(globalArgs()); }
   if (j.subs) { a.push(['--write-subs'], ['--sub-langs', S.subLang || 'zh.*,en'], ['--convert-subs', 'srt']); if (j.embed) a.push(['--embed-subs']); }
   if (j.embed) a.push(['--embed-thumbnail'], ['--embed-metadata']);
@@ -622,6 +633,7 @@ window.onProg = s => {
 };
 window.onDone = s => {
   const p = typeof s === 'string' ? JSON.parse(s) : s, j = byPid(p.id); if (!j) return;
+  if (!p.ok && j.fast && !j.noFast && !j.stop && p.msg !== '已取消' && !/Private|unavailable|removed|No space/i.test(p.msg || '')) { j.noFast = true; j.stage = '多線下載失敗，改回一般方式…'; startJob(j); return; }
   if (!p.ok && j.hdSrc && !j.stop && p.msg !== '已取消') { j.hdSrc = false; j.noHd = true; startJob(j); return; }   // 高畫質來源抓失敗：改回原本方式
   if (!p.ok && !j.stop && p.msg !== '已取消' && j.k + 1 < triesFor(j.url).length && !/Private|unavailable|removed|Unsupported|No space|login|cookies|資料夾/i.test(p.msg || '')) {
     j.k++; j.stage = `換方式重試（${j.k + 1}/${triesFor(j.url).length}）…`; startJob(j); return;
@@ -920,7 +932,7 @@ function act(j, a) {
   if (a === 'cancel') { j.stop = 1; if (j.state === 'wait' || j.igWait) { j.igWait = false; j.state = 'cancel'; j.msg = '已取消'; drawCard(j); saveQ(); } else call('cancel', j.pid); }
   else if (a === 'open') playF(j.files, j.title, j.id === stg.id ? stg.idx : 0);
   else if (a === 'share') shareF(f);
-  else if (a === 'retry') { j.noApi = false; j.noHd = false; j.noTg = false; j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
+  else if (a === 'retry') { j.noApi = false; j.noHd = false; j.noTg = false; j.noFast = false; j.k = 0; j.stop = 0; j.state = 'wait'; j.msg = ''; drawCard(j); pump(); saveQ(); }
   else if (a === 'detail') toast(String(j.raw || j.msg).slice(-300), 7000);
   else if (a === 'x') { const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); drawStage(); counts(); saveQ(); }
 }
@@ -1107,7 +1119,8 @@ function drawSet() {
   $('#galNote').textContent = verNum(call('shellVer')) < 108 && N ? '要外殼 V0.1.08 以上才有用，請先到「更新」裝新外殼' : (S.dest && S.dest.uri ? '你有自己選存檔資料夾，所以這個設定不會用到' : '會存到相簿的 YTDown' + (S.subdir ? '／平台名稱' : '') + '，其他檔案照舊存到「下載」');
   $('#concV').textContent = S.conc;
   $('#destName').textContent = S.dest && S.dest.uri ? '目前：' + S.dest.name + (has('treeOk') && !N.treeOk(S.dest.uri) ? '（不能用了，請重選）' : '') : '目前：手機的「下載/YTDown」';
-  bindSw('#sSubdir', 'subdir'); bindSw('#sTtHd', 'ttHd'); bindSw('#sAutoPlay', 'autoPlay', () => { if (!S.autoPlay) autoStop(); }); bindSw('#sPlaylist', 'playlist', () => sel.playlist = S.playlist);
+  bindSw('#sSubdir', 'subdir'); bindSw('#sTtHd', 'ttHd'); bindSw('#sYtFast', 'ytFast');
+  chipsInto($('#sYtConn'), [['4', '4 條'], ['8', '8 條'], ['12', '12 條'], ['16', '16 條']], String(S.ytConn || 8), v => { S.ytConn = +v; saveS(); drawSet(); }); bindSw('#sAutoPlay', 'autoPlay', () => { if (!S.autoPlay) autoStop(); }); bindSw('#sPlaylist', 'playlist', () => sel.playlist = S.playlist);
   bindSw('#sSubs', 'subs', () => { sel.subs = S.subs; drawQual(); }); bindSw('#sEmbed', 'embed', () => { sel.embed = S.embed; drawQual(); });
   bindSw('#sSponsor', 'sponsor', () => { sel.sponsor = S.sponsor; drawQual(); });
   bindSw('#sWifi', 'wifi', pump); bindSw('#sIgSlow', 'igSlow', () => { igNext = 0; pump(); }); bindSw('#sAria', 'aria');

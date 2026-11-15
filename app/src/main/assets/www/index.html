@@ -147,6 +147,8 @@
     </div>
     <div class="group"><h3>網路</h3>
       <label class="item"><span>只用 Wi-Fi 下載<small>用行動網路時先排隊，連上 Wi-Fi 再開始</small></span><input type="checkbox" class="sw" id="sWifi"></label>
+      <label class="item"><span>YouTube 多線加速<small>把影片切成很多小段同時下載，通常快很多；失敗會自動改回一般方式</small></span><input type="checkbox" class="sw" id="sYtFast"></label>
+      <div class="item col"><span>同時幾條線<small>越多越快，但太多可能被 YouTube 暫時擋住；建議 8</small></span><div id="sYtConn" class="chips"></div></div>
       <label class="item"><span>IG 慢慢下載<small>一次一則、每則隔幾秒、每 20 則休息 2～4 分鐘，比較不會被 IG 偵測</small></span><input type="checkbox" class="sw" id="sIgSlow"></label>
       <label class="item" id="ariaItem"><span>加速下載（aria2）<small>多條連線同時下載；少數網站會失敗，失敗就關掉</small></span><input type="checkbox" class="sw" id="sAria"></label>
       <div class="item col"><span>限速<small>例如 2M（每秒 2MB），留空不限</small></span><input id="sRate" type="text" autocomplete="off" spellcheck="false" placeholder="不限"></div>
