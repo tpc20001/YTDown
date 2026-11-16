@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.49';
+const UI_VER = 'YTD_UI_V0.1.50';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.50', ['下載頁的「📋 貼上」變成一個超大的按鈕，放在最上面', '按下去會有 1.5 秒的動畫和震動：綠色「＋1 第 N 個」＝加進去了，黃色＝這個已經加過了，紅色＝剪貼簿沒有網址']],
   ['YTD_V0.1.14（外殼）／YTD_UI_V0.1.49', ['🧪 新的「🪟 分屏」：挑一個 App（例如 Telegram），YT Download 會請系統把它開在旁邊，平板上會直接進分屏，手機分身裡也可以試', '長按 YT Download 圖示多了「分屏」捷徑，拖到桌面就是一鍵分屏（跟上次選的 App）']],
   ['YTD_V0.1.13（外殼）／YTD_UI_V0.1.48', ['一次按下載的多個網址（或分享進來的多個、IG 帳號勾選的多則）算成一組：紀錄裡合成一筆，所有照片影片放在一起，標出幾個網址、幾個失敗；再下載、複製連結也是整組', '新的「📋 連續收集」：打開後，在別的 App 複製網址，回到 YT Download（小窗點一下就好）就自動加進去，不用再按貼上；收完按一次下載＝一組', '外殼：小窗被點到時也會讀剪貼簿（以前要整個 App 回到前面才讀）']],
   ['YTD_UI_V0.1.47', ['🎛 轉盤改成看不見：左下角一樣可以順時針轉快轉、逆時針轉倒轉，但不畫唱盤、不擋畫面', '叫出控制列時，左下角的進度條、按鈕照樣按得到']],
@@ -298,7 +299,26 @@ function onInput() {
 }
 urlBox.addEventListener('input', onInput);
 urlBox.addEventListener('keydown', e => { if (e.key === 'Enter' && !$('#searchBox').hidden) { e.preventDefault(); doSearch(); } });
-$('#bPaste').onclick = () => { const t = call('paste') || ''; if (!t) { toast('剪貼簿是空的'); return; } if (!addUrls(t, true)) { urlBox.value = t.trim(); onInput(); } };
+// 大「貼上」：按下去 1.5 秒內用顏色、動畫、震動告訴你結果（綠＝加進去第幾個、黃＝已經有了、紅＝沒有網址）
+let bpT = 0;
+function bpShow(kind, main, sub, buzz) {
+  const b = $('#bPaste'); clearTimeout(bpT);
+  b.classList.remove('ok', 'dup', 'bad'); void b.offsetWidth; b.classList.add(kind);
+  b.innerHTML = `<span class="bp-ring"></span><span class="bp-main">${esc(main)}</span><span class="bp-sub">${esc(sub)}</span>`;
+  call('vibrate', buzz);
+  bpT = setTimeout(() => { b.classList.remove('ok', 'dup', 'bad'); const n = currentUrls().length; b.innerHTML = `<span class="bp-main">📋 貼上</span><span class="bp-sub">${n ? `已經有 ${n} 個，複製下一個再按` : '複製網址後按這裡'}</span>`; }, 1600);
+}
+$('#bPaste').onclick = () => {
+  const t = call('paste') || '';
+  if (!t.trim()) { bpShow('bad', '剪貼簿是空的', '先去複製網址', 60); return; }
+  const L = urlsIn(t);
+  if (!L.length) { urlBox.value = t.trim(); onInput(); bpShow('bad', '這不是網址', '已經放進框框（會當成搜尋）', 60); return; }
+  const before = currentUrls().length;
+  addUrls(t, true);
+  const n = currentUrls().length, added = n - before;
+  if (added > 0) { LS('lastClip', L[0]); bpShow('ok', `＋${added}　第 ${n} 個`, '加進去了！可以去複製下一個', 40); }
+  else bpShow('dup', '這個已經加過了', `現在共 ${n} 個`, 25);
+};
 $('#bClear').onclick = () => { urlBox.value = ''; info = null; probeUrl = ''; onInput(); urlBox.focus(); };
 $('#bCollect').onclick = () => {
   const on = !LS('collect'); LS('collect', on ? 1 : 0); collectUi();
