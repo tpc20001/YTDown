@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.53';
+const UI_VER = 'YTD_UI_V0.1.54';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.54', ['大「貼上」按鈕改成暗色（深色底＋淡藍邊框），晚上用不刺眼；按下去的綠／黃／紅提示也調暗了']],
   ['YTD_V0.1.15（外殼）／YTD_UI_V0.1.53', ['分享選單多了「收集到 YT Download」：在 IG、Telegram 等按分享選它，網址直接收進來，畫面不會跳走，只跳一個「已收集第 N 個」的小提示', '收完回 YT Download 按一次下載＝一組（原本的「YT Download」分享還是直接下載）']],
   ['YTD_UI_V0.1.52', ['紀錄的縮圖改用手機裡的檔案本身（照片直接顯示、影片抓一格畫面），每一則都有縮圖；手機播不了的格式才用網站給的縮圖', '看過的會標「✓ 看過」（多張的標看過幾張），一張一張的小圖看過的會變暗打勾，比較不會點到重複的', '播放時左邊邊緣有兩條細白線：按上面那段＝較新的一則、下面那段＝較舊的一則（照紀錄頁的順序），觸控範圍大約 3 公分寬']],
   ['YTD_UI_V0.1.51', ['橫的影片不再自動轉成橫向全螢幕，照你手上拿的方向（直的）播放', '想要橫向最大畫面看：按右下角的 ⟳，再按一次轉回來']],
