@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.57';
+const UI_VER = 'YTD_UI_V0.1.58';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.58', ['播放器改成像抖音：在畫面任何地方往上滑＝下一則（較舊）、往下滑＝上一則（較新），照紀錄頁的順序；左右滑一樣是拖進度（照片是換張）。手機、平板、橫的影片都一樣', '關掉播放器改用左上角 ✕ 或返回鍵（不是從紀錄打開的單一個檔，往下滑一樣是關掉）', '🎛 轉盤和左下角上一則／下一則先收起來，工具列的 🎛 可以叫回來（轉盤也調大了一點）']],
   ['YTD_UI_V0.1.57', ['左邊的上一則／下一則縮成很小一塊，貼在最左下角（每半大約 1.6 公分），拇指一定搆得到']],
   ['YTD_UI_V0.1.56', ['防呆：返回鍵最多只會回到下載頁（貼上的那一頁），按幾次都不會把 YT Download 關掉；分屏時誤按也不會讓左邊的視窗不見']],
   ['YTD_UI_V0.1.55', ['左邊的上一則／下一則縮成原本「下一則」那一段的大小，上半＝較新、下半＝較舊，整組再往下一點，拇指比較按得到', '🎛 轉盤改成扁的橢圓：比較矮、貼著底邊往右延伸，不會只擠在左下角']],
@@ -1574,6 +1575,7 @@ document.addEventListener('seeked', e => {
 // =====================================================================
 const P = { list: [], i: 0, title: '', rate: Math.min(4, Math.max(0.25, +LS('prate') || 1)), uiT: 0, land: false, a: null, b: null };
 const pEl = $('#player'), pv = $('#pv'), pim = $('#pi');
+pim.draggable = false; pim.addEventListener('dragstart', e => e.preventDefault());   // 照片不能被「拖走」，不然上下滑會被打斷
 function mimeGuess(n) { const e = (String(n || '').split('.').pop() || '').toLowerCase(); return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime', m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', ogg: 'audio/ogg', flac: 'audio/flac', wav: 'audio/wav', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic' })[e] || ''; }
 const mimeOf = f => (f && (f.mime && f.mime !== 'application/octet-stream' ? f.mime : mimeGuess(f.name))) || '';
 function playF(files, title, start, hctx) {
@@ -1588,7 +1590,7 @@ function pPos(save) { const f = P.list[P.i]; if (!f || pv.hidden) return 0; cons
   if (isFinite(pv.duration) && pv.duration > 60) { if (pv.currentTime > 5 && pv.currentTime < pv.duration - 10) M[f.uri] = Math.floor(pv.currentTime); else delete M[f.uri]; const K = Object.keys(M); if (K.length > 300) delete M[K[0]]; LS('pos', M); } return 0; }
 function pLoad() {
   const f = P.list[P.i], img = mimeOf(f).startsWith('image/');
-  markW(f.uri); $('#pNav').hidden = !P.hctx; pEl.classList.toggle('hasnav', !!P.hctx);
+  markW(f.uri); $('#pNav').hidden = !P.hctx || !jog.on; pEl.classList.toggle('hasnav', !!P.hctx && jog.on);
   $('#pErr').hidden = true; $('#pSeek').hidden = true;
   $('#pTitle').textContent = (P.list.length > 1 ? `${P.i + 1}/${P.list.length}　` : '') + (P.title || f.name || '');
   $('#pPrev').hidden = $('#pNext').hidden = P.list.length < 2;
@@ -1650,18 +1652,18 @@ $('#pLoop').onclick = () => { pv.loop = !pv.loop; LS('ploop', pv.loop); $('#pLoo
 $('#pFit').onclick = () => { const on = !pEl.classList.contains('fill'); pEl.classList.toggle('fill', on); LS('pfill', on); $('#pFit').classList.toggle('on', on); toast(on ? '填滿畫面（邊邊會切掉）' : '完整顯示'); pUi(); };
 // ---- 🎛 轉盤：左下角四分之一圓的隱形觸控區（不畫東西、不擋畫面），拇指順時針轉＝快轉、逆時針＝倒轉。轉慢＝一點一點細調，轉快＝跳很遠
 //      手壓著畫面跟著走，放開從那裡播（跟在畫面上左右滑一樣）。平板預設開、手機預設關，🎛 切換（會記住）
-const jog = { on: LS('pjog') == null ? Math.min(screen.width, screen.height) >= 600 : !!LS('pjog'), g: null, ang: 0, last: 0, tick: 0 };
+const jog = { on: LS('pjog2') == null ? false : !!LS('pjog2'), g: null, ang: 0, last: 0, tick: 0 };
 const jogEl = $('#pJog');
 function jogShow() {
   const show = jog.on && !pEl.hidden && !pv.hidden;
   jogEl.hidden = !show; pEl.classList.toggle('hasjog', show); $('#pJogBtn').classList.toggle('on', jog.on);
   if (show) {                                                           // 扁的橢圓：貼著底邊往右延伸（像唱盤的八分之一）
-    const R = Math.max(150, Math.min(320, Math.min(pEl.clientWidth, pEl.clientHeight) * 0.4));
-    pEl.style.setProperty('--jogW', Math.round(Math.min(pEl.clientWidth * 0.6, R * 1.55)) + 'px');
+    const R = Math.max(160, Math.min(360, Math.min(pEl.clientWidth, pEl.clientHeight) * 0.46));
+    pEl.style.setProperty('--jogW', Math.round(Math.min(pEl.clientWidth * 0.65, R * 1.6)) + 'px');
     pEl.style.setProperty('--jogH', Math.round(R * 0.62) + 'px');
   }
 }
-$('#pJogBtn').onclick = () => { jog.on = !jog.on; LS('pjog', jog.on); jogShow(); toast(jog.on ? '轉盤開了：左下角（看不見）順時針轉快轉、逆時針倒轉' : '轉盤關了'); pUi(); };
+$('#pJogBtn').onclick = () => { jog.on = !jog.on; LS('pjog2', jog.on); $('#pNav').hidden = !P.hctx || !jog.on; pEl.classList.toggle('hasnav', !!P.hctx && jog.on); jogShow(); toast(jog.on ? '左手按鈕開了：左下角轉盤＋上一則／下一則' : '左手按鈕收起來了（上下滑一樣可以換）'); pUi(); };
 addEventListener('resize', () => { if (!pEl.hidden) jogShow(); });
 const jogAngle = (g, e) => Math.atan2((g.cy - e.clientY) / g.h, (e.clientX - g.cx) / g.w);   // 照橢圓的比例算角度
 jogEl.addEventListener('pointerdown', e => {
@@ -1696,17 +1698,33 @@ jogEl.addEventListener('pointerup', jogEnd);
 jogEl.addEventListener('pointercancel', jogEnd);
 // ---- 左邊邊緣：上半＝較新的一則、下半＝較舊的一則（照紀錄頁的順序）。只畫兩條細白線，觸控區大約 3 公分寬
 function pNavHint(t) { const el = $('#pSeek'); el.hidden = false; el.innerHTML = `<b style="font-size:16px">${esc(t)}</b>`; clearTimeout(P.navT); P.navT = setTimeout(() => { if (!gs) el.hidden = true; }, 1400); }
+// 上下滑換一則：從紀錄打開的照紀錄順序換；不然多個檔就換檔；單一個檔往下滑＝關掉
+function pVert(d) {
+  const m = pv.hidden ? pim : pv;
+  const reset = () => { m.style.transition = 'transform .22s, opacity .22s'; m.style.transform = ''; m.style.opacity = ''; };
+  let moved = false;
+  if (P.hctx) moved = histStep(d);
+  else if (P.list.length > 1) { pStep(d); moved = true; }
+  else if (d < 0) { pClose(); reset(); return; }
+  else { pNavHint('沒有下一個了'); call('vibrate', 60); }
+  if (!moved) { reset(); return; }
+  const n = pv.hidden ? pim : pv;                                             // 新的從另一邊滑進來
+  n.style.transition = 'none'; n.style.transform = `translateY(${d > 0 ? 40 : -40}%)`; n.style.opacity = '0.3';
+  if (n !== m) { m.style.transform = ''; m.style.opacity = ''; }
+  requestAnimationFrame(() => requestAnimationFrame(() => { n.style.transition = 'transform .25s ease-out, opacity .25s'; n.style.transform = ''; n.style.opacity = ''; }));
+}
 function histStep(d) {
   const c = P.hctx; if (!c) return;
   const H = LS('hist') || [], get = k => H.find(x => hKey(x) === c.order[k]);
   let k = c.at, h = null;
   while (true) {
     k += d;
-    if (k < 0 || k >= c.order.length) { pNavHint(d < 0 ? '已經是最新的一則' : '已經是最舊的一則'); call('vibrate', 60); return; }
+    if (k < 0 || k >= c.order.length) { pNavHint(d < 0 ? '已經是最新的一則' : '已經是最舊的一則'); call('vibrate', 60); return false; }
     h = get(k); if (h && h.ok && !h.gone && mediaOf(h.files).length) break;
   }
   pPos(true); c.at = k; P.list = mediaOf(h.files); P.i = 0; P.title = h.title || '';
   pLoad(); pNavHint((d < 0 ? '▲ 較新：' : '▼ 較舊：') + (h.title || '')); call('vibrate', 20);
+  return true;
 }
 ['pointerdown', 'pointerup'].forEach(ev => $('#pNav').addEventListener(ev, e => e.stopPropagation()));
 $('#pNavUp').onclick = e => { e.stopPropagation(); histStep(-1); };
@@ -1736,13 +1754,14 @@ pEl.addEventListener('pointermove', e => {
   const dx = e.clientX - gs.x0, dy = e.clientY - gs.y0, now = performance.now();
   if (!gs.mode) {
     if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2) gs.mode = pv.hidden ? 'swipe' : 'seek';
-    else if (dy > 24 && Math.abs(dy) > Math.abs(dx) * 1.5) gs.mode = 'down';
+    else if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx) * 1.5) gs.mode = 'vert';   // 上下滑：換影片（像抖音）
     else return;
     clearTimeout(gs.lp);
     gs.lx = e.clientX; gs.lt = now; gs.base = gs.tgt = pv.currentTime || 0;
     if (gs.mode === 'seek') scrubStart(pv);
   }
   if (gs.mode === 'fast') return;
+  if (gs.mode === 'vert') { const m = pv.hidden ? pim : pv; m.style.transition = 'none'; m.style.transform = `translateY(${dy / (ZM || 1)}px)`; m.style.opacity = String(Math.max(0.35, 1 - Math.abs(dy) / 900)); return; }
   if (gs.mode === 'seek' && isFinite(pv.duration)) {
     const step = e.clientX - gs.lx, dt = Math.max(now - gs.lt, 1), v = Math.abs(step) / dt;      // 手指速度（像素／毫秒）
     const maxGain = Math.min(4, Math.max(0.06, pv.duration / 400));                               // 長片快滑一次能跳比較遠
@@ -1760,9 +1779,14 @@ function pEnd(e, cancel) {
   $('#pSeek').hidden = true;
   if (g.mode === 'fast') { pv.playbackRate = P.rate; return; }
   if (g.mode === 'seek') { scrubEnd(pv, isFinite(pv.duration) ? g.tgt : NaN); pUi(); return; }      // 放開＝從這裡開始播
-  if (cancel) return;
+  if (cancel) { if (g.mode === 'vert') { const m = pv.hidden ? pim : pv; m.style.transform = ''; m.style.opacity = ''; } return; }
   if (g.mode === 'swipe') { pStep(e.clientX - g.x0 < 0 ? 1 : -1); return; }
-  if (g.mode === 'down') { if (e.clientY - g.y0 > 110) pClose(); return; }
+  if (g.mode === 'vert') {                                                    // 往上滑＝下一則（較舊）、往下滑＝上一則（較新）
+    const dy = e.clientY - g.y0, fast = Math.abs(dy) / Math.max(1, performance.now() - g.lt) > 0.5;
+    const m = pv.hidden ? pim : pv;
+    if (Math.abs(dy) < 90 && !fast) { m.style.transition = 'transform .2s, opacity .2s'; m.style.transform = ''; m.style.opacity = ''; return; }
+    pVert(dy < 0 ? 1 : -1); return;
+  }
   const now = performance.now(), w = pEl.clientWidth * ZM;
   if (now - lastTap < 300 && !pv.hidden) { clearTimeout(tapT); lastTap = 0; if (e.clientX < w * 0.35) pJump(-10); else if (e.clientX > w * 0.65) pJump(10); else pToggle(); }
   else { lastTap = now; tapT = setTimeout(() => { if (pEl.classList.contains('ui') && !pv.hidden && !pv.paused) { clearTimeout(P.uiT); pEl.classList.remove('ui'); } else pUi(); }, 300); }

@@ -365,3 +365,4 @@ video.thumb{object-fit:cover;background:#000;pointer-events:none}
 .player .p-nav button::before{content:"";position:absolute;left:5px;top:20%;bottom:20%;width:3px;border-radius:2px;background:rgba(255,255,255,.5);box-shadow:0 0 3px rgba(0,0,0,.6)}
 .player .p-nav button:active::before{background:#fff}
 .player.hasnav .p-bot{padding-left:72px}
+.player img{-webkit-user-drag:none;user-select:none}
