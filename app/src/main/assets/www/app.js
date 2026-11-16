@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.55';
+const UI_VER = 'YTD_UI_V0.1.56';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.56', ['防呆：返回鍵最多只會回到下載頁（貼上的那一頁），按幾次都不會把 YT Download 關掉；分屏時誤按也不會讓左邊的視窗不見']],
   ['YTD_UI_V0.1.55', ['左邊的上一則／下一則縮成原本「下一則」那一段的大小，上半＝較新、下半＝較舊，整組再往下一點，拇指比較按得到', '🎛 轉盤改成扁的橢圓：比較矮、貼著底邊往右延伸，不會只擠在左下角']],
   ['YTD_UI_V0.1.54', ['大「貼上」按鈕改成暗色（深色底＋淡藍邊框），晚上用不刺眼；按下去的綠／黃／紅提示也調暗了']],
   ['YTD_V0.1.15（外殼）／YTD_UI_V0.1.53', ['分享選單多了「收集到 YT Download」：在 IG、Telegram 等按分享選它，網址直接收進來，畫面不會跳走，只跳一個「已收集第 N 個」的小提示', '收完回 YT Download 按一次下載＝一組（原本的「YT Download」分享還是直接下載）']],
@@ -266,7 +267,11 @@ window.onBack = () => {
   if (!$('#player').hidden) { pClose(); return true; }
   if (!$('#igPane').hidden) { igClose(); return true; }
   if (!$('#browseRow').hidden) { $('#browseRow').hidden = true; return true; }
-  const on = document.querySelector('.tab.on'); if (on && on.dataset.p !== 'dl') { page('dl'); return true; } return false;
+  if (!$('#splitBox').hidden) { $('#splitBox').hidden = true; return true; }
+  const on = document.querySelector('.tab.on'); if (on && on.dataset.p !== 'dl') { page('dl'); return true; }
+  // 防呆：已經在下載頁了也不退出（分屏時常常以為是在按影片那邊的返回）。最多就是回到這一頁
+  const t = Date.now(); if (t - (window.__bkT || 0) > 2500) { toast('返回鍵不會關掉 YT Download（已經在首頁）', 1500); window.__bkT = t; }
+  return true;
 };
 
 // ---------- 主題
