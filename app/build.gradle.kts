@@ -11,8 +11,8 @@ android {
         applicationId = "com.golden.ytdown"
         minSdk = 26
         targetSdk = 34
-        versionCode = 111
-        versionName = "YTD_V0.1.11"
+        versionCode = 112
+        versionName = "YTD_V0.1.12"
         ndk { abiFilters += listOf("arm64-v8a") }   // 只留現在手機用的 64 位元，APK 從 160MB 縮到約三分之一
     }
     // 固定簽章：keystore/ytd.jks（BUILD_APK.bat 第一次會自動產生）。同一把鑰匙打包，手機才能直接覆蓋安裝
@@ -28,6 +28,7 @@ android {
             signingConfig = if (ytdKs.exists()) signingConfigs.getByName("ytd") else signingConfigs.getByName("debug")
         }
     }
+    buildFeatures { buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     packaging { jniLibs { useLegacyPackaging = true } }   // yt-dlp 的 python 要解壓出來才跑得動
 }

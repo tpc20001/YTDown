@@ -49,7 +49,8 @@ import java.util.zip.ZipInputStream
  */
 class MainActivity : AppCompatActivity() {
     companion object {
-        const val SHELL = "YTD_V0.1.10"
+        /** 外殼版本直接讀 APK 的 versionName（build.gradle.kts），不再寫死，才不會跟實際裝的對不上 */
+        val SHELL: String = BuildConfig.VERSION_NAME
         const val ACTION_PASTE = "com.golden.ytdown.PASTE"
         const val ACTION_BROWSE = "com.golden.ytdown.BROWSE"
     }

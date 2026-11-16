@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.44';
+const UI_VER = 'YTD_UI_V0.1.45';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.12（外殼）／YTD_UI_V0.1.45', ['修正：裝了新外殼 V0.1.11 之後，App 還是一直說是 V0.1.10、一直叫你更新（外殼的版本號寫死了沒跟著改）', '外殼版本改成直接讀安裝檔的版本，以後不會再對不上']],
   ['YTD_UI_V0.1.44', ['下載完自動播放時一律先靜音，右下角 🔇 點一下就有聲音（只開這一支，下一支還是靜音）']],
   ['YTD_UI_V0.1.43', ['播放時左右滑（或拖進度條）手壓著，畫面會跟著換到那個時間點，放開就從那裡開始播；方便找關鍵畫面', '速度：點右下的 1x，用 －／＋ 每次調 0.1 倍（0.25～4 倍），或直接點 0.5／1／1.25／1.5／2，會記住', '長按畫面＝暫時 2 倍速，放開恢復', '新按鈕：◀▮ ▮▶ 逐格看、A-B 重複一段、🔁 整部重複、⛶ 填滿畫面（會記住）', '下載頁大畫面拖進度也一樣會跟著換畫面']],
   ['YTD_UI_V0.1.42', ['小窗、分屏時整個畫面等比例縮小，按鈕不會變得很大把要看的內容擠小', '縮小時左右滑換張、點兩下快轉的位置也跟著對準']],
