@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         val SHELL: String = BuildConfig.VERSION_NAME
         const val ACTION_PASTE = "com.golden.ytdown.PASTE"
         const val ACTION_BROWSE = "com.golden.ytdown.BROWSE"
+        const val ACTION_SPLIT = "com.golden.ytdown.SPLIT"
     }
 
     private lateinit var web: WebView
@@ -124,6 +125,7 @@ class MainActivity : AppCompatActivity() {
         Intent.ACTION_SEND -> i.getStringExtra(Intent.EXTRA_TEXT)?.let { "onShare" to it }
         ACTION_PASTE -> "onShortcut" to "paste"
         ACTION_BROWSE -> "onShortcut" to "browse"
+        ACTION_SPLIT -> "onShortcut" to "split"
         else -> null
     }
 
@@ -441,6 +443,25 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) { js("onApk", jo("ok" to false, "msg" to "更新失敗：" + (e.message ?: ""))) }
             }
         }
+        // ---- 🪟 分屏：請系統把另一個 App 開在旁邊（FLAG_ACTIVITY_LAUNCH_ADJACENT）。平板大螢幕上，系統收到會直接進分屏
+        @JavascriptInterface fun launchApps(): String {
+            val a = org.json.JSONArray()
+            try {
+                val pm = packageManager
+                pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                    .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+                    .distinctBy { it.first }.filter { it.first != packageName }.sortedBy { it.second }
+                    .forEach { a.put(JSONObject().put("pkg", it.first).put("name", it.second)) }
+            } catch (_: Exception) {}
+            return a.toString()
+        }
+        @JavascriptInterface fun splitWith(pkg: String): String {
+            val i = packageManager.getLaunchIntentForPackage(pkg) ?: return "手機上找不到這個 App"
+            i.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or Intent.FLAG_ACTIVITY_NEW_TASK)
+            runOnUiThread { try { startActivity(i) } catch (e: Exception) { js("onToast", "開不起來：" + (e.message ?: "")) } }
+            return "OK"
+        }
+        @JavascriptInterface fun multiWin(): Boolean = Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode
         @JavascriptInterface fun resetUi() { runOnUiThread { wwwDir().deleteRecursively(); loadUi() } }
         @JavascriptInterface fun reload() { runOnUiThread { loadUi() } }
     }

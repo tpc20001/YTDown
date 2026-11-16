@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.48';
+const UI_VER = 'YTD_UI_V0.1.49';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.14（外殼）／YTD_UI_V0.1.49', ['🧪 新的「🪟 分屏」：挑一個 App（例如 Telegram），YT Download 會請系統把它開在旁邊，平板上會直接進分屏，手機分身裡也可以試', '長按 YT Download 圖示多了「分屏」捷徑，拖到桌面就是一鍵分屏（跟上次選的 App）']],
   ['YTD_V0.1.13（外殼）／YTD_UI_V0.1.48', ['一次按下載的多個網址（或分享進來的多個、IG 帳號勾選的多則）算成一組：紀錄裡合成一筆，所有照片影片放在一起，標出幾個網址、幾個失敗；再下載、複製連結也是整組', '新的「📋 連續收集」：打開後，在別的 App 複製網址，回到 YT Download（小窗點一下就好）就自動加進去，不用再按貼上；收完按一次下載＝一組', '外殼：小窗被點到時也會讀剪貼簿（以前要整個 App 回到前面才讀）']],
   ['YTD_UI_V0.1.47', ['🎛 轉盤改成看不見：左下角一樣可以順時針轉快轉、逆時針轉倒轉，但不畫唱盤、不擋畫面', '叫出控制列時，左下角的進度條、按鈕照樣按得到']],
   ['YTD_UI_V0.1.46', ['新的 🎛 轉盤：播放影片時左下角有一塊四分之一圓的唱盤，左手拇指順時針轉＝快轉、逆時針轉＝倒轉；轉慢＝細調、轉快＝跳很遠，手壓著畫面跟著走，放開從那裡播', '平板預設打開、手機預設關，下面工具列的 🎛 可以開關（會記住）']],
@@ -524,7 +525,25 @@ window.onShare = t => {
   if (fresh.length) toast(fresh.length > 1 ? `已開始下載 ${fresh.length} 個` : '已開始下載');
   else if (dup) askClip(dup, true);
 };
+// ---- 🪟 分屏：請系統把另一個 App 開在旁邊（平板大螢幕上會直接進分屏，手機分身裡也試得到）
+function splitGo(pkg, name) {
+  if (!has('splitWith')) { toast('要先更新外殼到 V0.1.14'); return; }
+  LS('splitPkg', pkg); LS('splitName', name || pkg); $('#splitBox').hidden = true;
+  const r = N.splitWith(pkg); if (r !== 'OK') { toast(r); return; }
+  setTimeout(() => { if (call('multiWin')) toast('分屏好了 👏', 1800); else toast('系統沒有讓它分屏（只開了一邊）。可以再按一次試試，或把這個情況告訴我', 5000); }, 1800);
+}
+function drawSplit() {
+  const box = $('#splitBox'), apps = jcall('launchApps') || [], kw = (box.querySelector('input') || {}).value || '';
+  const cur = LS('splitPkg'), curName = LS('splitName');
+  if (!box.querySelector('input')) box.innerHTML = `${cur ? `<button class="btn primary" type="button" data-sp="${esc(cur)}" data-sn="${esc(curName || cur)}">🪟 跟 ${esc(curName || cur)} 分屏</button>` : ''}<span class="mut small">挑一個要開在旁邊的 App（會記住；長按 YT Download 圖示有「分屏」捷徑，可以拖到桌面一鍵分屏）</span><input type="search" placeholder="搜尋 App"><div class="chips"></div>`;
+  const q = kw.trim().toLowerCase();
+  box.querySelector('.chips').innerHTML = apps.filter(a => !q || (a.name + a.pkg).toLowerCase().includes(q)).slice(0, 120).map(a => `<button class="chip" type="button" data-sp="${esc(a.pkg)}" data-sn="${esc(a.name)}" aria-pressed="${a.pkg === cur}">${esc(a.name)}</button>`).join('') || '<span class="mut small">找不到</span>';
+}
+$('#bSplit').onclick = () => { const box = $('#splitBox'); box.hidden = !box.hidden; if (!box.hidden) { box.innerHTML = ''; drawSplit(); } };
+$('#splitBox').addEventListener('input', () => drawSplit());
+$('#splitBox').addEventListener('click', e => { const b = e.target.closest('[data-sp]'); if (b) splitGo(b.dataset.sp, b.dataset.sn); });
 window.onShortcut = k => {
+  if (k === 'split') { const p = LS('splitPkg'); if (p) splitGo(p, LS('splitName')); else { page('dl'); $('#splitBox').hidden = false; $('#splitBox').innerHTML = ''; drawSplit(); toast('先挑一次要跟誰分屏，之後捷徑就會直接分'); } return; }
   if (k === 'paste') { page('dl'); const t = call('paste') || ''; if (S.autoDl && urlsIn(t).length) window.onShare(t); else if (!addUrls(t, true)) toast('剪貼簿裡沒有網址'); }
   else if (k === 'browse') { page('dl'); $('#bBrowse').click(); }
 };

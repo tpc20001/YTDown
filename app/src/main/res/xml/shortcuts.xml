@@ -12,4 +12,10 @@
         <intent android:action="com.golden.ytdown.BROWSE"
             android:targetPackage="com.golden.ytdown" android:targetClass="com.golden.ytdown.MainActivity" />
     </shortcut>
+    <shortcut android:shortcutId="split" android:enabled="true"
+        android:icon="@drawable/ic_sc_split"
+        android:shortcutShortLabel="@string/sc_split" android:shortcutLongLabel="@string/sc_split_long">
+        <intent android:action="com.golden.ytdown.SPLIT"
+            android:targetPackage="com.golden.ytdown" android:targetClass="com.golden.ytdown.MainActivity" />
+    </shortcut>
 </shortcuts>

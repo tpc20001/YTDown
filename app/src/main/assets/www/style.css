@@ -329,3 +329,7 @@ body.locked{overflow:hidden}
 /* 🎛 轉盤：左下角四分之一圓的「看不見的」觸控區（不畫任何東西，不擋畫面）。控制列在它上面，按得到 */
 .p-jog{position:absolute;left:0;bottom:0;width:var(--jogR,240px);height:var(--jogR,240px);z-index:0;touch-action:none;border-top-right-radius:100%;background:transparent}
 .player .p-top,.player .p-bot,.player .p-rate{z-index:2}
+
+/* 🪟 分屏：挑 App */
+.split-box{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:10px}
+.split-box .chips{max-height:220px;overflow-y:auto}

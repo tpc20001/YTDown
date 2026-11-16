@@ -10,6 +10,13 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- 🪟 分屏：列出手機上的 App 讓你挑要跟誰分屏 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
     <application
         android:name=".App"
         android:label="YT Download"
@@ -37,6 +44,7 @@
             <!-- 長按圖示的捷徑 -->
             <intent-filter>
                 <action android:name="com.golden.ytdown.PASTE" />
+                <action android:name="com.golden.ytdown.SPLIT" />
                 <action android:name="com.golden.ytdown.BROWSE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
