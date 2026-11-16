@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.43';
+const UI_VER = 'YTD_UI_V0.1.44';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.44', ['下載完自動播放時一律先靜音，右下角 🔇 點一下就有聲音（只開這一支，下一支還是靜音）']],
   ['YTD_UI_V0.1.43', ['播放時左右滑（或拖進度條）手壓著，畫面會跟著換到那個時間點，放開就從那裡開始播；方便找關鍵畫面', '速度：點右下的 1x，用 －／＋ 每次調 0.1 倍（0.25～4 倍），或直接點 0.5／1／1.25／1.5／2，會記住', '長按畫面＝暫時 2 倍速，放開恢復', '新按鈕：◀▮ ▮▶ 逐格看、A-B 重複一段、🔁 整部重複、⛶ 填滿畫面（會記住）', '下載頁大畫面拖進度也一樣會跟著換畫面']],
   ['YTD_UI_V0.1.42', ['小窗、分屏時整個畫面等比例縮小，按鈕不會變得很大把要看的內容擠小', '縮小時左右滑換張、點兩下快轉的位置也跟著對準']],
   ['YTD_V0.1.11（外殼）／YTD_UI_V0.1.41', ['支援小米三指分屏、小窗：可以跟其他 App 一起開', '分屏時播放影片不會再強制轉橫向（避免分屏被退出）']],
@@ -786,7 +787,7 @@ function drawStage() {
     let m = '';
     if (M.length) {
       const f = M[stg.idx];
-      m = `<div class="st-slide cur">${slideHTML(j, f)}</div><button class="st-play" type="button" aria-label="播放"${mimeOf(f).startsWith('image/') ? ' hidden' : ''}>▶</button><div class="st-hint" hidden></div><div class="st-ctl" hidden><span class="st-cur">0:00</span><input type="range" class="st-bar" min="0" max="1000" value="0" aria-label="播放進度"><span class="st-dur"></span></div>`;
+      m = `<div class="st-slide cur">${slideHTML(j, f)}</div><button class="st-play" type="button" aria-label="播放"${mimeOf(f).startsWith('image/') ? ' hidden' : ''}>▶</button><div class="st-hint" hidden></div><div class="st-ctl" hidden><span class="st-cur">0:00</span><input type="range" class="st-bar" min="0" max="1000" value="0" aria-label="播放進度"><span class="st-dur"></span><button class="st-mute" type="button" aria-label="聲音">🔇</button></div>`;
       if (M.length > 1) m = `<div class="pgr"></div><span class="st-count">1 / ${M.length}</span>`;      // 多張：一頁一張
     } else {
       m = (j.thumb ? `<img class="st-m dim" src="${esc(j.thumb)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : '')
@@ -814,7 +815,7 @@ const stageKey = (j, M) => [j.id, j.state, M.length, stg.idx, j.thumb || '', j.t
 function slideHTML(j, f) {
   const t = mimeOf(f);
   return t.startsWith('image/') ? `<img class="st-m" src="${esc(f.uri)}" alt="" draggable="false">`
-    : `<video class="st-m" src="${esc(f.uri)}${t.startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline${!t.startsWith('video/') && j.thumb ? ` poster="${esc(j.thumb)}"` : ''}></video>`;
+    : `<video class="st-m" src="${esc(f.uri)}${t.startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline muted${!t.startsWith('video/') && j.thumb ? ` poster="${esc(j.thumb)}"` : ''}></video>`;
 }
 const stageEl = $('#stage');
 const stageVid = () => stageEl.querySelector('.st-slide.cur video');
@@ -823,13 +824,17 @@ function stageWire(v) { // 把影片接上進度條、播放鈕（只對「現�
   if (v.dataset.w) return; v.dataset.w = '1';
   const q = c => stageEl.querySelector(c), mine = () => v === stageVid();
   v.addEventListener('timeupdate', () => { const bar = q('.st-bar'); if (!mine() || (stageG && stageG.mode === 'seek') || !isFinite(v.duration) || !bar) return; bar.value = Math.round(v.currentTime / v.duration * 1000); q('.st-cur').textContent = fmtDur(v.currentTime) || '0:00'; q('.st-dur').textContent = fmtDur(v.duration); });
-  v.addEventListener('play', () => { if (!mine()) return; const b = q('.st-play'), c = q('.st-ctl'); if (b) b.hidden = true; if (c) c.hidden = false; call('keepOn', true); });
+  v.addEventListener('play', () => { if (!mine()) return; const b = q('.st-play'), c = q('.st-ctl'); if (b) b.hidden = true; if (c) c.hidden = false; muteIcon(v); call('keepOn', true); });
+  v.addEventListener('volumechange', () => { if (mine()) muteIcon(v); });
   v.addEventListener('pause', () => { if (!mine()) return; const b = q('.st-play'); if (b) b.hidden = false; call('keepOn', false); });
   v.addEventListener('ended', () => { if (!mine()) return; const b = q('.st-play'); if (b && !auto.on) b.hidden = false; if (!auto.on) call('keepOn', false); });
   const bad = () => { if (!mine() || q('.st-err')) return; autoStop(); const b = q('.st-play'); if (b) b.hidden = true; stageEl.insertAdjacentHTML('beforeend', '<div class="st-err"><span>這支影片的格式手機內建的播放器解不了</span><button class="btn primary" type="button" data-a="ext">用其他 App 播（例如 MX Player）</button></div>'); };
   v.addEventListener('error', bad);
   if (v.error) bad();
 }
+// 下載頁大畫面的影片一律先靜音（自動播放也不會突然出聲），右下 🔇 點一下開聲音（只開這一支）
+function muteIcon(v) { const m = stageEl.querySelector('.st-mute'); if (m) m.textContent = v.muted ? '🔇' : '🔊'; }
+stageEl.addEventListener('click', e => { if (!e.target.closest('.st-mute')) return; const v = stageVid(); if (!v) return; v.muted = !v.muted; muteIcon(v); });
 function stageToggle() {
   const v = stageVid(); if (!v) return; stageWire(v);
   if (v.paused) { if (!v.dataset.s) { v.dataset.s = '1'; try { v.currentTime = 0; } catch (e) {} } const p = v.play(); if (p && p.catch) p.catch(() => {}); }
@@ -892,7 +897,7 @@ function pagerPlay(v) { try { v.currentTime = 0; } catch (e) {} const p = v.play
 function pagerBuild(j, M) {
   const el = stageEl.querySelector('.pgr'); clearTimeout(pager.t);
   Object.assign(pager, { el, n: M.length, idx: 0, drag: 0 });
-  const one = (f, i) => `<div class="pg-s" data-n="${i}">${mimeOf(f).startsWith('image/') ? `<img src="${esc(f.uri)}" alt="" draggable="false">` : `<video src="${esc(f.uri)}${mimeOf(f).startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline></video><span class="fr-k">▶</span>`}</div>`;
+  const one = (f, i) => `<div class="pg-s" data-n="${i}">${mimeOf(f).startsWith('image/') ? `<img src="${esc(f.uri)}" alt="" draggable="false">` : `<video src="${esc(f.uri)}${mimeOf(f).startsWith('video/') ? '#t=0.5' : ''}" preload="metadata" playsinline muted></video><span class="fr-k">▶</span>`}</div>`;
   el.innerHTML = M.map(one).join('') + one(M[0], 0);            // 最後多放一張「第一張」，循環時才接得起來
   el.addEventListener('ended', e => { if (e.target.tagName === 'VIDEO') pagerEnded(e.target); }, true);
   el.addEventListener('play', e => { const k = e.target.parentNode.querySelector('.fr-k'); if (k) k.hidden = true; }, true);

@@ -288,6 +288,7 @@ body.locked{overflow:hidden}
 /* ---- V0.1.27：大畫面直接播放 ---- */
 .st-ctl{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;align-items:center;gap:10px;padding:22px 12px 10px;background:linear-gradient(#0000,#000b);color:#fff;font-size:12.5px;font-variant-numeric:tabular-nums}
 .st-ctl input{flex:1;min-width:0;accent-color:#4dc9ff;height:26px}
+.st-mute{flex:none;width:36px;height:36px;border:0;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;font-size:17px;cursor:pointer}
 .st-hint{position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:2;background:rgba(0,0,0,.72);color:#fff;border-radius:14px;padding:9px 16px;font-size:14px;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;pointer-events:none}
 .st-hint b{font-size:20px}
 .st-hint span{display:block;color:#4dc9ff;font-size:13px;margin-top:2px}
