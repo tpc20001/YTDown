@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.54';
+const UI_VER = 'YTD_UI_V0.1.55';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.55', ['左邊的上一則／下一則縮成原本「下一則」那一段的大小，上半＝較新、下半＝較舊，整組再往下一點，拇指比較按得到', '🎛 轉盤改成扁的橢圓：比較矮、貼著底邊往右延伸，不會只擠在左下角']],
   ['YTD_UI_V0.1.54', ['大「貼上」按鈕改成暗色（深色底＋淡藍邊框），晚上用不刺眼；按下去的綠／黃／紅提示也調暗了']],
   ['YTD_V0.1.15（外殼）／YTD_UI_V0.1.53', ['分享選單多了「收集到 YT Download」：在 IG、Telegram 等按分享選它，網址直接收進來，畫面不會跳走，只跳一個「已收集第 N 個」的小提示', '收完回 YT Download 按一次下載＝一組（原本的「YT Download」分享還是直接下載）']],
   ['YTD_UI_V0.1.52', ['紀錄的縮圖改用手機裡的檔案本身（照片直接顯示、影片抓一格畫面），每一則都有縮圖；手機播不了的格式才用網站給的縮圖', '看過的會標「✓ 看過」（多張的標看過幾張），一張一張的小圖看過的會變暗打勾，比較不會點到重複的', '播放時左邊邊緣有兩條細白線：按上面那段＝較新的一則、下面那段＝較舊的一則（照紀錄頁的順序），觸控範圍大約 3 公分寬']],
@@ -1648,15 +1649,20 @@ const jogEl = $('#pJog');
 function jogShow() {
   const show = jog.on && !pEl.hidden && !pv.hidden;
   jogEl.hidden = !show; pEl.classList.toggle('hasjog', show); $('#pJogBtn').classList.toggle('on', jog.on);
-  if (show) pEl.style.setProperty('--jogR', Math.round(Math.max(170, Math.min(340, Math.min(pEl.clientWidth, pEl.clientHeight) * 0.42))) + 'px');
+  if (show) {                                                           // 扁的橢圓：貼著底邊往右延伸（像唱盤的八分之一）
+    const R = Math.max(150, Math.min(320, Math.min(pEl.clientWidth, pEl.clientHeight) * 0.4));
+    pEl.style.setProperty('--jogW', Math.round(Math.min(pEl.clientWidth * 0.6, R * 1.55)) + 'px');
+    pEl.style.setProperty('--jogH', Math.round(R * 0.62) + 'px');
+  }
 }
 $('#pJogBtn').onclick = () => { jog.on = !jog.on; LS('pjog', jog.on); jogShow(); toast(jog.on ? '轉盤開了：左下角（看不見）順時針轉快轉、逆時針倒轉' : '轉盤關了'); pUi(); };
 addEventListener('resize', () => { if (!pEl.hidden) jogShow(); });
-const jogAngle = (g, e) => Math.atan2(g.cy - e.clientY, e.clientX - g.cx);
+const jogAngle = (g, e) => Math.atan2((g.cy - e.clientY) / g.h, (e.clientX - g.cx) / g.w);   // 照橢圓的比例算角度
 jogEl.addEventListener('pointerdown', e => {
   e.stopPropagation(); if (!isFinite(pv.duration)) return;
   const r = pEl.getBoundingClientRect();
-  const g = jog.g = { cx: r.left, cy: r.bottom, t: performance.now(), base: pv.currentTime || 0, tgt: pv.currentTime || 0 };
+  const jr = jogEl.getBoundingClientRect();
+  const g = jog.g = { cx: r.left, cy: r.bottom, w: Math.max(1, jr.width), h: Math.max(1, jr.height), t: performance.now(), base: pv.currentTime || 0, tgt: pv.currentTime || 0 };
   g.a = jogAngle(g, e);
   scrubStart(pv); call('vibrate', 12);
   try { jogEl.setPointerCapture(e.pointerId); } catch (x) {}
