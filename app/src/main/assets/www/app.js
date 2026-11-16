@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.46';
+const UI_VER = 'YTD_UI_V0.1.47';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.47', ['🎛 轉盤改成看不見：左下角一樣可以順時針轉快轉、逆時針轉倒轉，但不畫唱盤、不擋畫面', '叫出控制列時，左下角的進度條、按鈕照樣按得到']],
   ['YTD_UI_V0.1.46', ['新的 🎛 轉盤：播放影片時左下角有一塊四分之一圓的唱盤，左手拇指順時針轉＝快轉、逆時針轉＝倒轉；轉慢＝細調、轉快＝跳很遠，手壓著畫面跟著走，放開從那裡播', '平板預設打開、手機預設關，下面工具列的 🎛 可以開關（會記住）']],
   ['YTD_V0.1.12（外殼）／YTD_UI_V0.1.45', ['修正：裝了新外殼 V0.1.11 之後，App 還是一直說是 V0.1.10、一直叫你更新（外殼的版本號寫死了沒跟著改）', '外殼版本改成直接讀安裝檔的版本，以後不會再對不上']],
   ['YTD_UI_V0.1.44', ['下載完自動播放時一律先靜音，右下角 🔇 點一下就有聲音（只開這一支，下一支還是靜音）']],
@@ -1465,7 +1466,7 @@ function pLoad() {
   $('#pPrev').hidden = $('#pNext').hidden = P.list.length < 2;
   pim.hidden = !img; pv.hidden = img; $('#pBot').hidden = img; $('#pPlay').hidden = img;
   if (has('fileExists') && !N.fileExists(f.uri)) { pFail('檔案已經被刪除或搬走了'); return; }
-  if (img) { $('#pJog').hidden = true; pEl.classList.remove('jog'); pv.pause(); pv.removeAttribute('src'); pv.load(); pim.src = f.uri; call('orient', 'auto'); pUi(true); }
+  if (img) { $('#pJog').hidden = true; pv.pause(); pv.removeAttribute('src'); pv.load(); pim.src = f.uri; call('orient', 'auto'); pUi(true); }
   else { P.a = P.b = null; pAbUi(); setTimeout(jogShow, 0); $('#pRateBox').hidden = true; pim.removeAttribute('src'); $('#pBar').value = 0; $('#pCur').textContent = '0:00'; $('#pDur').textContent = ''; pv.src = f.uri; pv.playbackRate = P.rate; const p = pv.play(); if (p && p.catch) p.catch(() => {}); pUi(); }
 }
 function pFail(msg) { $('#pErrMsg').textContent = msg; $('#pErr').hidden = false; pUi(true); }
@@ -1519,16 +1520,16 @@ $('#pAB').onclick = () => {
 };
 $('#pLoop').onclick = () => { pv.loop = !pv.loop; LS('ploop', pv.loop); $('#pLoop').classList.toggle('on', pv.loop); toast(pv.loop ? '這部會一直重複播' : '不重複'); pUi(); };
 $('#pFit').onclick = () => { const on = !pEl.classList.contains('fill'); pEl.classList.toggle('fill', on); LS('pfill', on); $('#pFit').classList.toggle('on', on); toast(on ? '填滿畫面（邊邊會切掉）' : '完整顯示'); pUi(); };
-// ---- 🎛 轉盤：左下角四分之一圓，拇指順時針轉＝快轉、逆時針＝倒轉。轉慢＝一點一點細調，轉快＝跳很遠
+// ---- 🎛 轉盤：左下角四分之一圓的隱形觸控區（不畫東西、不擋畫面），拇指順時針轉＝快轉、逆時針＝倒轉。轉慢＝一點一點細調，轉快＝跳很遠
 //      手壓著畫面跟著走，放開從那裡播（跟在畫面上左右滑一樣）。平板預設開、手機預設關，🎛 切換（會記住）
 const jog = { on: LS('pjog') == null ? Math.min(screen.width, screen.height) >= 600 : !!LS('pjog'), g: null, ang: 0, last: 0, tick: 0 };
-const jogEl = $('#pJog'), jogDisc = $('#pJogDisc');
+const jogEl = $('#pJog');
 function jogShow() {
   const show = jog.on && !pEl.hidden && !pv.hidden;
-  jogEl.hidden = !show; pEl.classList.toggle('jog', show); $('#pJogBtn').classList.toggle('on', jog.on);
+  jogEl.hidden = !show; $('#pJogBtn').classList.toggle('on', jog.on);
   if (show) pEl.style.setProperty('--jogR', Math.round(Math.max(170, Math.min(340, Math.min(pEl.clientWidth, pEl.clientHeight) * 0.42))) + 'px');
 }
-$('#pJogBtn').onclick = () => { jog.on = !jog.on; LS('pjog', jog.on); jogShow(); toast(jog.on ? '轉盤開了：左下角順時針轉快轉、逆時針倒轉' : '轉盤關了'); pUi(); };
+$('#pJogBtn').onclick = () => { jog.on = !jog.on; LS('pjog', jog.on); jogShow(); toast(jog.on ? '轉盤開了：左下角（看不見）順時針轉快轉、逆時針倒轉' : '轉盤關了'); pUi(); };
 addEventListener('resize', () => { if (!pEl.hidden) jogShow(); });
 const jogAngle = (g, e) => Math.atan2(g.cy - e.clientY, e.clientX - g.cx);
 jogEl.addEventListener('pointerdown', e => {
@@ -1536,7 +1537,7 @@ jogEl.addEventListener('pointerdown', e => {
   const r = pEl.getBoundingClientRect();
   const g = jog.g = { cx: r.left, cy: r.bottom, t: performance.now(), base: pv.currentTime || 0, tgt: pv.currentTime || 0 };
   g.a = jogAngle(g, e);
-  scrubStart(pv); jogEl.classList.add('act'); pUi(true); call('vibrate', 12);
+  scrubStart(pv); call('vibrate', 12);
   try { jogEl.setPointerCapture(e.pointerId); } catch (x) {}
 });
 jogEl.addEventListener('pointermove', e => {
@@ -1548,7 +1549,6 @@ jogEl.addEventListener('pointermove', e => {
   const maxGain = Math.min(8, Math.max(0.2, pv.duration / 150)), k = Math.min(1, Math.max(0, (sp - 0.04) / 0.6));
   const gain = 0.06 + (maxGain - 0.06) * k * k;                                         // 每轉一度跳幾秒：慢＝很細，快＝很多
   g.tgt = Math.min(pv.duration, Math.max(0, g.tgt + deg * gain));
-  jog.ang += deg; jogDisc.style.transform = `rotate(${jog.ang}deg)`;
   jog.tick += Math.abs(deg); if (jog.tick >= 12) { jog.tick = 0; call('vibrate', 10); }    // 每轉一小格震一下，像唱盤的刻度
   pHint(g.tgt, g.tgt - g.base);
   $('#pBar').value = Math.round(g.tgt / pv.duration * 1000); $('#pCur').textContent = fmtDur(g.tgt) || '0:00';
@@ -1556,15 +1556,11 @@ jogEl.addEventListener('pointermove', e => {
 });
 const jogEnd = e => {
   e.stopPropagation(); const g = jog.g; jog.g = null; if (!g) return;
-  jogEl.classList.remove('act'); $('#pSeek').hidden = true;
-  scrubEnd(pv, g.tgt); pUi();
+  $('#pSeek').hidden = true;
+  scrubEnd(pv, g.tgt);
 };
 jogEl.addEventListener('pointerup', jogEnd);
 jogEl.addEventListener('pointercancel', jogEnd);
-(function jogSpin(t) {                                                                  // 播放時唱盤慢慢轉
-  if (!jog.g && !jogEl.hidden && !pv.paused && jog.last) { jog.ang += (t - jog.last) / 1000 * 24 * (pv.playbackRate || 1); jogDisc.style.transform = `rotate(${jog.ang}deg)`; }
-  jog.last = t; requestAnimationFrame(jogSpin);
-})(0);
 pv.loop = !!LS('ploop'); $('#pLoop').classList.toggle('on', pv.loop);
 if (LS('pfill')) { pEl.classList.add('fill'); $('#pFit').classList.add('on'); }
 $('#pRot').onclick = () => { P.land = !P.land; call('orient', P.land ? 'land' : 'port'); pUi(); };

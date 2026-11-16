@@ -326,17 +326,6 @@ body.locked{overflow:hidden}
 .ql.ok .ql-s{color:var(--ok,#4cd88a)}.ql.ok,.ql.cancel{opacity:.7}.ql.bad .ql-s{color:#ff8a96}
 .st-cap{font-size:13px;letter-spacing:.12em;color:#aab3bf}
 
-/* 🎛 轉盤（左下角四分之一圓，像 DJ 唱盤）。--jogR＝半徑，JS 依螢幕大小算 */
-.p-jog{position:absolute;left:0;bottom:0;width:var(--jogR,240px);height:var(--jogR,240px);z-index:1;overflow:hidden;touch-action:none;opacity:.45;transition:opacity .2s;border-top-right-radius:100%}
-.player.ui .p-jog,.p-jog.act{opacity:1}
-.p-jog-disc{position:absolute;left:calc(var(--jogR,240px)*-1);bottom:calc(var(--jogR,240px)*-1);width:calc(var(--jogR,240px)*2);height:calc(var(--jogR,240px)*2);border-radius:50%;
-  background:radial-gradient(circle,#0b0c0e 0 22%,#2a2e35 22.5% 23.5%,#15171b 24% 95%,#4dc9ff 95.5% 97%,#0b0c0e 97.5% 100%);box-shadow:0 0 24px rgba(0,0,0,.6);will-change:transform}
-.p-jog-ticks{position:absolute;inset:0;border-radius:50%;background:repeating-conic-gradient(rgba(255,255,255,.55) 0deg 1deg,transparent 1deg 7.5deg);
-  -webkit-mask:radial-gradient(circle,transparent 0 70%,#000 70.5% 93%,transparent 93.5%);mask:radial-gradient(circle,transparent 0 70%,#000 70.5% 93%,transparent 93.5%)}
-.p-jog-disc i{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px;border-radius:50%;background:#4dc9ff;box-shadow:0 0 8px #4dc9ff}
-.p-jog-disc .d1{transform:rotate(-30deg) translateX(calc(var(--jogR,240px)*.82))}.p-jog-disc .d2{transform:rotate(-120deg) translateX(calc(var(--jogR,240px)*.82))}
-.p-jog-disc .d3{transform:rotate(60deg) translateX(calc(var(--jogR,240px)*.82))}.p-jog-disc .d4{transform:rotate(150deg) translateX(calc(var(--jogR,240px)*.82))}
-.p-jog-cap{position:absolute;left:calc(var(--jogR,240px)*-.22);bottom:calc(var(--jogR,240px)*-.22);width:calc(var(--jogR,240px)*.44);height:calc(var(--jogR,240px)*.44);border-radius:50%;background:radial-gradient(circle at 60% 40%,#3a3f48,#15171b);border:1px solid #2a2e35}
-.p-jog-lbl{position:absolute;left:calc(var(--jogR,240px)*.3);bottom:calc(var(--jogR,240px)*.5);font-size:12px;color:#d5dae1;white-space:nowrap;transform:rotate(-45deg);transform-origin:left bottom;pointer-events:none;text-shadow:0 1px 3px #000}
-.p-jog.act .p-jog-disc{box-shadow:0 0 30px rgba(77,201,255,.35)}
-.player.jog .p-bot{padding-left:calc(var(--jogR,240px) * .62)}
+/* 🎛 轉盤：左下角四分之一圓的「看不見的」觸控區（不畫任何東西，不擋畫面）。控制列在它上面，按得到 */
+.p-jog{position:absolute;left:0;bottom:0;width:var(--jogR,240px);height:var(--jogR,240px);z-index:0;touch-action:none;border-top-right-radius:100%;background:transparent}
+.player .p-top,.player .p-bot,.player .p-rate{z-index:2}
