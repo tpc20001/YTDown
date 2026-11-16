@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.47';
+const UI_VER = 'YTD_UI_V0.1.48';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.13（外殼）／YTD_UI_V0.1.48', ['一次按下載的多個網址（或分享進來的多個、IG 帳號勾選的多則）算成一組：紀錄裡合成一筆，所有照片影片放在一起，標出幾個網址、幾個失敗；再下載、複製連結也是整組', '新的「📋 連續收集」：打開後，在別的 App 複製網址，回到 YT Download（小窗點一下就好）就自動加進去，不用再按貼上；收完按一次下載＝一組', '外殼：小窗被點到時也會讀剪貼簿（以前要整個 App 回到前面才讀）']],
   ['YTD_UI_V0.1.47', ['🎛 轉盤改成看不見：左下角一樣可以順時針轉快轉、逆時針轉倒轉，但不畫唱盤、不擋畫面', '叫出控制列時，左下角的進度條、按鈕照樣按得到']],
   ['YTD_UI_V0.1.46', ['新的 🎛 轉盤：播放影片時左下角有一塊四分之一圓的唱盤，左手拇指順時針轉＝快轉、逆時針轉＝倒轉；轉慢＝細調、轉快＝跳很遠，手壓著畫面跟著走，放開從那裡播', '平板預設打開、手機預設關，下面工具列的 🎛 可以開關（會記住）']],
   ['YTD_V0.1.12（外殼）／YTD_UI_V0.1.45', ['修正：裝了新外殼 V0.1.11 之後，App 還是一直說是 V0.1.10、一直叫你更新（外殼的版本號寫死了沒跟著改）', '外殼版本改成直接讀安裝檔的版本，以後不會再對不上']],
@@ -282,6 +283,7 @@ function currentUrls() { return [...new Set(urlsIn(urlBox.value))]; }
 
 function onInput() {
   const L = currentUrls(), text = urlBox.value.trim();
+  collectUi();
   const searching = !L.length && text.length > 1;
   $('#searchBox').hidden = !searching;
   $('#dlOpts').hidden = searching || !L.length;
@@ -297,6 +299,11 @@ urlBox.addEventListener('input', onInput);
 urlBox.addEventListener('keydown', e => { if (e.key === 'Enter' && !$('#searchBox').hidden) { e.preventDefault(); doSearch(); } });
 $('#bPaste').onclick = () => { const t = call('paste') || ''; if (!t) { toast('剪貼簿是空的'); return; } if (!addUrls(t, true)) { urlBox.value = t.trim(); onInput(); } };
 $('#bClear').onclick = () => { urlBox.value = ''; info = null; probeUrl = ''; onInput(); urlBox.focus(); };
+$('#bCollect').onclick = () => {
+  const on = !LS('collect'); LS('collect', on ? 1 : 0); collectUi();
+  if (on) { LS('lastClip', call('paste') ? urlsIn(call('paste'))[0] || '' : ''); toast('連續收集開了：去複製網址，回來（小窗點一下）就會自動加進來，收完按下載', 4500); }
+  else toast('連續收集關了');
+};
 
 function addUrls(text, quiet) {
   const L = urlsIn(text); if (!L.length) { if (!quiet) toast('裡面沒有網址'); return false; }
@@ -382,7 +389,7 @@ window.onInfo = s => {
     if (p.heights && p.heights.length) j.res = resFor(j.q, p.heights[0]);
     const el = document.getElementById(j.id); if (el) el.dataset.st = '';
     drawCard(j); saveQ();
-    if (['ok', 'bad'].includes(j.state)) { const H = LS('hist') || [], h = H.find(x => x.u === j.url && !x.res); if (h) { h.res = j.res; if (!h.thumb) h.thumb = j.thumb; LS('hist', H); } }
+    if (['ok', 'bad'].includes(j.state)) { const H = LS('hist') || [], h = H.find(x => x.u === j.url && !x.res && !x.grp); if (h) { h.res = j.res; if (!h.thumb) h.thumb = j.thumb; LS('hist', H); } }
     return;
   }
   if (p.id !== probeId) return;
@@ -444,7 +451,9 @@ $('#bGo').onclick = () => {
   if (Number.isNaN(a) || Number.isNaN(b) || (a != null && b != null && b <= a)) { toast('片段時間看不懂，例如 1:20 到 2:45'); $('#more').open = true; return; }
   const section = (a != null || b != null) ? `*${a != null ? a : 0}-${b != null ? b : 'inf'}` : '';
   if (S.notify && !LS('askedNotify')) { call('askNotify'); LS('askedNotify', 1); }
-  L.forEach(u => enqueue(u, sel.q, L.length === 1 ? info : null, { section, sponsor: sel.sponsor, chapters: sel.chapters }));
+  const grp = L.length > 1 ? newGrp() : '';                                 // 一次按下載的多個網址＝一組，紀錄裡合成一筆
+  L.forEach(u => enqueue(u, sel.q, L.length === 1 ? info : null, { section, sponsor: sel.sponsor, chapters: sel.chapters, grp, grpN: L.length }));
+  collectN = 0;
   urlBox.value = ''; info = null; probeUrl = ''; $('#secFrom').value = ''; $('#secTo').value = ''; sel.chapters = false; sel.sponsor = S.sponsor;
   onInput();
   toast(L.length > 1 ? `已加入 ${L.length} 個` : '已加入下載');
@@ -468,7 +477,7 @@ function urlKey(u) {
 function seenUrl(u) {
   const k = urlKey(u);
   if (Q.some(j => (j.state === 'run' || j.state === 'wait') && urlKey(j.url) === k)) return 'busy';
-  if (Q.some(j => j.state === 'ok' && urlKey(j.url) === k) || (LS('hist') || []).some(h => h.ok && urlKey(h.u) === k)) return 'had';
+  if (Q.some(j => j.state === 'ok' && urlKey(j.url) === k) || (LS('hist') || []).some(h => h.ok && hUrls(h).some(u => urlKey(u) === k))) return 'had';
   return '';
 }
 let clipDup = false;
@@ -479,13 +488,19 @@ function askClip(u, dup) {
   $('#clipUrl').textContent = u; $('#clipBar').hidden = false;
 }
 function autoGo(u) { LS('lastClip', u); $('#clipBar').hidden = true; page('dl'); enqueue(u, S.quality, null, { sponsor: S.sponsor }); }
+// 📋 連續收集：開著時，每次回到 App（小窗點一下也算）剪貼簿裡的新網址會自動加到下面，收完按一次下載＝一組
+let collectN = 0;
+function collectUi() { const b = $('#bCollect'); if (!b) return; const on = !!LS('collect'); b.classList.toggle('primary', on); b.classList.toggle('ghost', !on); b.textContent = on ? `📋 連續收集中${currentUrls().length ? '（' + currentUrls().length + '）' : ''}` : '📋 連續收集'; }
 function checkClip() {
-  if (!has('paste') || (!S.clip && !S.autoDl)) return;
+  if (!has('paste')) return;
+  const collect = !!LS('collect');
+  if (!collect && !S.clip && !S.autoDl) return;
   const L = urlsIn(N.paste()); if (!L.length) return;
   const u = L[0];
   if (u === LS('lastClip') || currentUrls().includes(u)) return;          // 同一份剪貼簿內容：不重複處理、也不一直問
   const seen = seenUrl(u);
   if (seen === 'busy') return;
+  if (collect && seen !== 'had') { LS('lastClip', u); page('dl'); addUrls(u, true); collectUi(); call('vibrate', 25); toast(`收集到第 ${currentUrls().length} 個`, 1500); return; }
   if (seen === 'had') { askClip(u, true); return; }                         // 下載過：要你按了才會再抓
   if (S.autoDl && siteOf(u) !== OTHER && !igUserOf(u)) { autoGo(u); toast('已自動開始下載（' + siteOf(u).k + '）', 3000); return; }
   if (S.clip) askClip(u, false);
@@ -495,6 +510,7 @@ let clipTimers = [];
 function clipSoon() { clipTimers.forEach(clearTimeout); clipTimers = [300, 900, 1800, 3000].map(ms => setTimeout(checkClip, ms)); }
 window.onResume = () => { clipSoon(); refreshEnv(); pump(); autoCheck(false); };
 window.addEventListener('focus', clipSoon);
+window.onFocusWin = () => clipSoon();                                       // 外殼 V0.1.13：小窗被點到（拿到焦點）時
 document.addEventListener('visibilitychange', () => { if (!document.hidden) clipSoon(); });
 $('#clipAdd').onclick = () => { if (clipDup) { autoGo(clipU); toast('再下載一次'); return; } LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
 $('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; };
@@ -503,7 +519,8 @@ window.onShare = t => {
   if (!L.length) { toast('分享的內容裡沒有網址'); return; }
   if (!S.autoDl) { addUrls(t); return; }
   const fresh = L.filter(u => !seenUrl(u)), dup = L.find(u => seenUrl(u) === 'had');
-  fresh.forEach(u => { LS('lastClip', u); enqueue(u, S.quality, null, { sponsor: S.sponsor }); });
+  const grp = fresh.length > 1 ? newGrp() : '';
+  fresh.forEach(u => { LS('lastClip', u); enqueue(u, S.quality, null, { sponsor: S.sponsor, grp, grpN: fresh.length }); });
   if (fresh.length) toast(fresh.length > 1 ? `已開始下載 ${fresh.length} 個` : '已開始下載');
   else if (dup) askClip(dup, true);
 };
@@ -517,7 +534,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc', 'doneAt'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc', 'doneAt', 'grp', 'grpN'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -526,7 +543,7 @@ function enqueue(url, q, inf, x) {
     playlist: !!(inf && inf.isList && sel.playlist), subs: !!(sel.subs && !['audio', 'mp3', 'thumb'].includes(q)), embed: !!(sel.embed && q !== 'thumb'),
     sponsor: !!(x.sponsor && st.k === 'YouTube' && q !== 'thumb'), chapters: !!(x.chapters && q !== 'thumb'), section: x.section || '',
     k: inf && inf.ok ? (inf.k || 0) : 0, state: 'wait', pct: 0, t: Date.now() };
-  j.uploader = inf && inf.ok ? (inf.uploader || '') : ''; j.uid = (inf && (inf.uid || (inf.ig && inf.ig.uid))) || ''; j.igData = (inf && inf.ig) || null; j.bulk = !!x.bulk;
+  j.uploader = inf && inf.ok ? (inf.uploader || '') : ''; j.uid = (inf && (inf.uid || (inf.ig && inf.ig.uid))) || ''; j.igData = (inf && inf.ig) || null; j.bulk = !!x.bulk; j.grp = x.grp || ''; j.grpN = x.grpN || 0;
   if (inf && inf.ok && inf.heights && inf.heights.length) j.res = resFor(q, inf.heights[0]);
   Q.unshift(j); drawCard(j); pump(); saveQ();
   if (!(inf && inf.ok) && newShell() && q !== 'thumb' && st.k !== 'Instagram' && !(st.k === 'Telegram' && tgReady())) N.probe('qi:' + j.id, url, probeSpec(url, 0));
@@ -1098,9 +1115,31 @@ let hFilter = '全部', hAsk = -1, hShow = 100;
 const szOf = h => (h.files || []).reduce((a, x) => a + (+x.size || 0), 0);
 const mediaOf = files => (files || []).filter(f => f && f.uri && /^(video|audio|image)\//.test(mimeOf(f)));
 const hThumb = h => { const f = !h.gone && (h.files || []).find(x => /^image\//.test(x.mime || '')); return f ? f.uri : h.thumb; };   // 照片用自己的檔當縮圖，不會過期
+const newGrp = () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const hUrls = h => h.us && h.us.length ? h.us : [h.u];
+const grpTitle = h => `${h.title0 || '一組下載'}${h.grpN > 1 ? ` 等 ${h.grpN} 個網址` : ''}`;
 function saveHist(j) {
-  const H = LS('hist') || [];
-  H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: j.res || 0, uploader: j.uploader || '', uid: j.uid || '', ok: j.state === 'ok', msg: j.msg, files: (j.files || []).slice(0, 20) });
+  const H = LS('hist') || [], ok = j.state === 'ok';
+  if (j.grp) {                                                                  // 同一組的合成一筆：檔案全部放一起
+    const h = H.find(x => x.grp === j.grp);
+    if (h) {
+      h.t = Date.now(); h.us = [...new Set([...hUrls(h), j.url])];
+      h.files = [...(h.files || []), ...(j.files || [])].slice(0, 800);
+      if (ok) h.nOk = (h.nOk || 0) + 1; else { h.nBad = (h.nBad || 0) + 1; h.msg = ((h.msg ? h.msg + '\n' : '') + (j.title || j.url) + '：' + (j.msg || '失敗')).slice(-3000); }
+      h.ok = (h.nOk || 0) > 0;
+      if (!h.title0 && j.title) h.title0 = j.title;
+      h.title = grpTitle(h);
+      if (!h.thumb && j.thumb) h.thumb = j.thumb;
+      if (h.site !== j.site) { h.site = '多個網站'; h.ab = '混合'; }
+      if (h.uploader && j.uploader && h.uploader !== j.uploader) { h.uploader = ''; h.uid = ''; }
+      H.splice(H.indexOf(h), 1); H.unshift(h);
+      LS('hist', H.slice(0, 1500)); return;
+    }
+    const g = { t: Date.now(), u: j.url, us: [j.url], grp: j.grp, grpN: j.grpN || 1, title0: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: 0, uploader: j.uploader || '', uid: j.uid || '',
+      ok, nOk: ok ? 1 : 0, nBad: ok ? 0 : 1, msg: ok ? '' : (j.title || j.url) + '：' + (j.msg || '失敗'), files: (j.files || []).slice(0, 800) };
+    g.title = grpTitle(g); H.unshift(g); LS('hist', H.slice(0, 1500)); return;
+  }
+  H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: j.res || 0, uploader: j.uploader || '', uid: j.uid || '', ok, msg: j.msg, files: (j.files || []).slice(0, 20) });
   LS('hist', H.slice(0, 1500));
 }
 function drawHist() {
@@ -1109,7 +1148,7 @@ function drawHist() {
   if (!sites.includes(hFilter)) hFilter = '全部';
   $('#hSites').innerHTML = sites.length > 2 ? sites.map(s => `<button class="chip" type="button" data-s="${esc(s)}" aria-pressed="${s === hFilter}">${esc(s)}</button>`).join('') : '';
   $('#hSites').querySelectorAll('.chip').forEach(b => b.onclick = () => { hFilter = b.dataset.s; drawHist(); });
-  const L = H.map((h, i) => Object.assign({ i }, h)).filter(h => (hFilter === '全部' || (h.site || '其他') === hFilter) && (!kw || (h.title || '').toLowerCase().includes(kw) || (h.u || '').toLowerCase().includes(kw) || (h.uploader || '').toLowerCase().includes(kw) || (h.site || '').toLowerCase().includes(kw)));
+  const L = H.map((h, i) => Object.assign({ i }, h)).filter(h => (hFilter === '全部' || (h.site || '其他') === hFilter) && (!kw || (h.title || '').toLowerCase().includes(kw) || hUrls(h).join(' ').toLowerCase().includes(kw) || (h.uploader || '').toLowerCase().includes(kw) || (h.site || '').toLowerCase().includes(kw)));
   const so = $('#hSort').value;
   L.sort((a, b) => so === 'old' ? a.t - b.t : so === 'big' ? szOf(b) - szOf(a) : so === 'small' ? szOf(a) - szOf(b) : so === 'title' ? (a.title || '').localeCompare(b.title || '', 'zh-Hant') : so === 'user' ? ((a.uploader || '\uffff').localeCompare(b.uploader || '\uffff') || b.t - a.t) : b.t - a.t);
   const more = L.length > hShow;
@@ -1121,9 +1160,9 @@ function drawHist() {
     const strip = multi ? `<div class="strip">${M.slice(0, 40).map((x, n) => `<button class="tile" type="button" data-a="openAt" data-n="${n}" aria-label="第 ${n + 1} 個">${mimeOf(x).startsWith('image/') ? `<img src="${esc(x.uri)}" alt="" loading="lazy">` : mimeOf(x).startsWith('video/') ? `<video src="${esc(x.uri)}#t=0.5" preload="metadata" muted playsinline></video><span class="tile-k">影片</span>` : '<span class="tile-k">聲音</span>'}</button>`).join('')}${M.length > 40 ? `<span class="mut small">還有 ${M.length - 40} 個</span>` : ''}</div>` : '';
     return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}${multi ? ' multi' : ''}" data-i="${h.i}">${multi ? '' : `<button class="tbtn" type="button" data-a="open" aria-label="播放">${thumbImg(hThumb(h))}</button>`}<div class="cb">
       <div class="ct">${esc(h.title || h.u)}</div>
-      <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span>${h.uploader ? `<button class="link who" type="button" data-a="who">${esc((h.site === 'Instagram' ? '@' : '') + h.uploader)}</button>` : ''}<span>${fmtTime(h.t)}</span><span>${esc(qShow(h.q || 'best', h.res))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}</div>
+      <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span>${h.uploader ? `<button class="link who" type="button" data-a="who">${esc((h.site === 'Instagram' ? '@' : '') + h.uploader)}</button>` : ''}<span>${fmtTime(h.t)}</span><span>${esc(qShow(h.q || 'best', h.res))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${h.grp ? `<span>${hUrls(h).length} 個網址</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}${h.grp && h.nBad ? `<span class="bad-t">${h.nBad} 個失敗</span>` : ''}</div>
       ${strip}
-      ${h.gone ? '<div class="st mut">檔案已刪除</div>' : h.ok ? '' : `<div class="st">${esc(h.msg || '失敗')}</div>`}
+      ${h.gone ? '<div class="st mut">檔案已刪除</div>' : h.ok && !(h.grp && h.nBad) ? '' : `<div class="st">${esc(h.msg || '失敗')}</div>`}
       ${hAsk === h.i ? `<div class="ask"><span>刪掉手機裡的檔案？刪了就找不回來。</span><button class="btn sm danger" data-a="delYes" type="button">刪掉</button><button class="btn sm ghost" data-a="delNo" type="button">取消</button></div>` : ''}
       <div class="acts">${h.ok && f && !h.gone ? '<button class="btn" data-a="open" type="button">播放</button><button class="btn ghost" data-a="share" type="button">分享</button>' : ''}<button class="btn ghost" data-a="again" type="button">再下載</button><button class="btn ghost" data-a="copy" type="button">複製連結</button>${h.ok && f && !h.gone && has('deleteFile') ? '<button class="btn ghost" data-a="delFile" type="button">刪檔案</button>' : ''}<button class="btn ghost" data-a="del" type="button">刪紀錄</button></div>
     </div></div>`;
@@ -1138,8 +1177,8 @@ $('#hist').onclick = e => {
   else if (a === 'openAt') playF(h.files, h.title, +b.dataset.n);
   else if (a === 'who') { if (h.site === 'Instagram' && has('http')) openIg(h.uploader, h.uid); else { $('#hSearch').value = h.uploader; hShow = 100; drawHist(); window.scrollTo(0, 0); } }
   else if (a === 'share') shareF(f);
-  else if (a === 'again') { page('dl'); addUrls(h.u); }
-  else if (a === 'copy') copyText(h.u);
+  else if (a === 'again') { page('dl'); addUrls(hUrls(h).join('\n')); }
+  else if (a === 'copy') copyText(hUrls(h).join('\n'));
   else if (a === 'del') { H.splice(i, 1); LS('hist', H); hAsk = -1; drawHist(); }
   else if (a === 'delFile') { hAsk = i; drawHist(); }
   else if (a === 'delNo') { hAsk = -1; drawHist(); }
@@ -1389,7 +1428,7 @@ async function igMore() {
       if (!IGP.uid) throw new Error('IG_NOUSER');
       await sleep(1200 + Math.random() * 800);
     }
-    const done = new Set((LS('hist') || []).filter(h => h.ok && !h.gone && h.site === 'Instagram').map(h => (igCode(h.u) || {}).code));
+    const done = new Set((LS('hist') || []).filter(h => h.ok && !h.gone).flatMap(h => hUrls(h)).map(u => (igCode(u) || {}).code).filter(Boolean));
     let added = 0;
     while (added < 1 && IGP.more) {          // 一次只問 IG 一頁（12 則），跟網頁往下滑一樣
       const j = await igGet(`feed/user/${IGP.uid}/?count=12` + (IGP.next ? '&max_id=' + encodeURIComponent(IGP.next) : ''));
@@ -1417,7 +1456,8 @@ $('#igClose').onclick = () => igClose();
 $('#igDl').onclick = () => {
   const L = IGP.posts.filter(p => IGP.sel.has(p.code)); if (!L.length) return;
   const who = IGP.user;
-  L.forEach(p => enqueue(`https://www.instagram.com/p/${p.code}/`, 'best', { ok: true, title: p.title, thumb: p.thumb, uploader: p.user || who, uid: p.uid || IGP.uid, ig: p, heights: [] }, { bulk: true }));
+  const grp = L.length > 1 ? newGrp() : '';
+  L.forEach(p => enqueue(`https://www.instagram.com/p/${p.code}/`, 'best', { ok: true, title: p.title, thumb: p.thumb, uploader: p.user || who, uid: p.uid || IGP.uid, ig: p, heights: [] }, { bulk: true, grp, grpN: L.length }));
   igClose(); page('dl'); toast(`已加入 ${L.length} 則，會照順序下載`, 3500);
 };
 

@@ -112,6 +112,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onResume() { super.onResume(); Engine.sink = { fn, arg -> js(fn, arg) }; js("onResume", "") }
+    /** 小窗、分屏時 App 一直是「開著」的，被點到才拿到焦點；Android 10 起只有拿到焦點才讀得到剪貼簿 */
+    override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) js("onFocusWin", "") }
     override fun onNewIntent(i: Intent) { super.onNewIntent(i); incoming(i)?.let { js(it.first, it.second) } }
     @Deprecated("WebView 先決定要不要處理返回鍵")
     override fun onBackPressed() { web.evaluateJavascript("window.onBack&&onBack()") { r -> if (r != "true") super.onBackPressed() } }
