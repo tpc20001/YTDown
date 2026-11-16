@@ -462,6 +462,9 @@ class MainActivity : AppCompatActivity() {
             return "OK"
         }
         @JavascriptInterface fun multiWin(): Boolean = Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode
+        // ---- 分享收集（CollectActivity 收到的網址）
+        @JavascriptInterface fun takeCollected(): String = Collect.take(this@MainActivity)
+        @JavascriptInterface fun collectReset() = Collect.reset(this@MainActivity)
         @JavascriptInterface fun resetUi() { runOnUiThread { wwwDir().deleteRecursively(); loadUi() } }
         @JavascriptInterface fun reload() { runOnUiThread { loadUi() } }
     }

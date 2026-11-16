@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.52';
+const UI_VER = 'YTD_UI_V0.1.53';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.15（外殼）／YTD_UI_V0.1.53', ['分享選單多了「收集到 YT Download」：在 IG、Telegram 等按分享選它，網址直接收進來，畫面不會跳走，只跳一個「已收集第 N 個」的小提示', '收完回 YT Download 按一次下載＝一組（原本的「YT Download」分享還是直接下載）']],
   ['YTD_UI_V0.1.52', ['紀錄的縮圖改用手機裡的檔案本身（照片直接顯示、影片抓一格畫面），每一則都有縮圖；手機播不了的格式才用網站給的縮圖', '看過的會標「✓ 看過」（多張的標看過幾張），一張一張的小圖看過的會變暗打勾，比較不會點到重複的', '播放時左邊邊緣有兩條細白線：按上面那段＝較新的一則、下面那段＝較舊的一則（照紀錄頁的順序），觸控範圍大約 3 公分寬']],
   ['YTD_UI_V0.1.51', ['橫的影片不再自動轉成橫向全螢幕，照你手上拿的方向（直的）播放', '想要橫向最大畫面看：按右下角的 ⟳，再按一次轉回來']],
   ['YTD_UI_V0.1.50', ['下載頁的「📋 貼上」變成一個超大的按鈕，放在最上面', '按下去會有 1.5 秒的動畫和震動：綠色「＋1 第 N 個」＝加進去了，黃色＝這個已經加過了，紅色＝剪貼簿沒有網址']],
@@ -476,7 +477,7 @@ $('#bGo').onclick = () => {
   if (S.notify && !LS('askedNotify')) { call('askNotify'); LS('askedNotify', 1); }
   const grp = L.length > 1 ? newGrp() : '';                                 // 一次按下載的多個網址＝一組，紀錄裡合成一筆
   L.forEach(u => enqueue(u, sel.q, L.length === 1 ? info : null, { section, sponsor: sel.sponsor, chapters: sel.chapters, grp, grpN: L.length }));
-  collectN = 0;
+  collectN = 0; call('collectReset');
   urlBox.value = ''; info = null; probeUrl = ''; $('#secFrom').value = ''; $('#secTo').value = ''; sel.chapters = false; sel.sponsor = S.sponsor;
   onInput();
   toast(L.length > 1 ? `已加入 ${L.length} 個` : '已加入下載');
@@ -531,9 +532,17 @@ function checkClip() {
 // 回到 App 時，系統可能還沒把剪貼簿交給我們，所以分幾次讀
 let clipTimers = [];
 function clipSoon() { clipTimers.forEach(clearTimeout); clipTimers = [300, 900, 1800, 3000].map(ms => setTimeout(checkClip, ms)); }
-window.onResume = () => { clipSoon(); refreshEnv(); pump(); autoCheck(false); };
+window.onResume = () => { clipSoon(); takeCollected(); refreshEnv(); pump(); autoCheck(false); };
 window.addEventListener('focus', clipSoon);
-window.onFocusWin = () => clipSoon();                                       // 外殼 V0.1.13：小窗被點到（拿到焦點）時
+window.onFocusWin = () => { clipSoon(); takeCollected(); };
+// 分享選單「收集到 YT Download」收進來的網址（外殼 V0.1.15）：畫面開著馬上加進來，沒開就等打開時
+function takeCollected() {
+  if (!has('takeCollected')) return; const L = jcall('takeCollected') || []; if (!L.length) return;
+  page('dl'); const before = currentUrls().length; addUrls(L.join('\n'), true);
+  const n = currentUrls().length; if (n > before) bpShow('ok', `＋${n - before}　共 ${n} 個`, '從分享收集進來的', 40);
+}
+window.onCollected = () => setTimeout(takeCollected, 50);
+setTimeout(takeCollected, 800);                                       // 外殼 V0.1.13：小窗被點到（拿到焦點）時
 document.addEventListener('visibilitychange', () => { if (!document.hidden) clipSoon(); });
 $('#clipAdd').onclick = () => { if (clipDup) { autoGo(clipU); toast('再下載一次'); return; } LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
 $('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; };
