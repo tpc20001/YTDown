@@ -366,3 +366,5 @@ video.thumb{object-fit:cover;background:#000;pointer-events:none}
 .player .p-nav button:active::before{background:#fff}
 .player.hasnav .p-bot{padding-left:72px}
 .player img{-webkit-user-drag:none;user-select:none}
+.player .p-mid{display:none!important}
+#pPlay{flex:none;width:40px;height:36px;padding:0;font-size:16px}

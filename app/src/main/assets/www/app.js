@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.59';
+const UI_VER = 'YTD_UI_V0.1.60';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.60', ['播放器畫面正中間不再出現任何按鈕：播放／暫停鈕搬到下面控制列的最左邊（點兩下畫面中間一樣可以播放／暫停）；同一則裡的上一張／下一張用左右滑']],
   ['YTD_UI_V0.1.59', ['紀錄改成「新的在最下面、舊的在上面」（像 IG、抖音），打開紀錄頁會直接到最下面（最新的）；要看更舊的，捲到最上面按「再顯示 100 筆較舊的」', '播放時往上滑＝下一則（比較新的）、往下滑＝上一則（比較舊的），跟紀錄頁的順序一樣', '排序選單可以換回「新的在最上面」']],
   ['YTD_UI_V0.1.58', ['播放器改成像抖音：在畫面任何地方往上滑＝下一則（較舊）、往下滑＝上一則（較新），照紀錄頁的順序；左右滑一樣是拖進度（照片是換張）。手機、平板、橫的影片都一樣', '關掉播放器改用左上角 ✕ 或返回鍵（不是從紀錄打開的單一個檔，往下滑一樣是關掉）', '🎛 轉盤和左下角上一則／下一則先收起來，工具列的 🎛 可以叫回來（轉盤也調大了一點）']],
   ['YTD_UI_V0.1.57', ['左邊的上一則／下一則縮成很小一塊，貼在最左下角（每半大約 1.6 公分），拇指一定搆得到']],
@@ -1584,6 +1585,8 @@ document.addEventListener('seeked', e => {
 // =====================================================================
 const P = { list: [], i: 0, title: '', rate: Math.min(4, Math.max(0.25, +LS('prate') || 1)), uiT: 0, land: false, a: null, b: null };
 const pEl = $('#player'), pv = $('#pv'), pim = $('#pi');
+// 畫面正中間不放任何按鈕（不要擋到影片）：播放／暫停鈕搬到下面的控制列，上一個／下一個用左右滑
+$('#pBot').insertBefore($('#pPlay'), $('#pCur'));
 pim.draggable = false; pim.addEventListener('dragstart', e => e.preventDefault());   // 照片不能被「拖走」，不然上下滑會被打斷
 function mimeGuess(n) { const e = (String(n || '').split('.').pop() || '').toLowerCase(); return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime', m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', ogg: 'audio/ogg', flac: 'audio/flac', wav: 'audio/wav', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic' })[e] || ''; }
 const mimeOf = f => (f && (f.mime && f.mime !== 'application/octet-stream' ? f.mime : mimeGuess(f.name))) || '';
