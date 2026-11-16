@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.41';
+const UI_VER = 'YTD_UI_V0.1.42';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -11,8 +11,26 @@ const call = (f, ...a) => { if (!has(f)) return null; try { return N[f](...a); }
 const jcall = (f, ...a) => { const r = call(f, ...a); try { return r ? JSON.parse(r) : null; } catch (e) { return null; } };
 const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
+// ---------- 分屏／小窗：整個畫面等比例縮小，按鈕不會變得比內容還大
+let ZM = 1, fitW = 0;
+function fitWin() {
+  const w = innerWidth, h = innerHeight, sw = screen.width || w, sh = screen.height || h;
+  const typing = /^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '');
+  if (!(typing && w === fitW)) {                       // 打字時鍵盤把高度變矮，不跟著縮
+    const small = w < sw * 0.9 || w < 340 || (h < 600 && w < 700);
+    ZM = small ? Math.max(0.55, Math.min(1, w / 380, h / 600)) : 1;
+    ZM = Math.round(ZM * 100) / 100; fitW = w;
+  }
+  const r = document.documentElement;
+  r.style.zoom = ZM === 1 ? '' : String(ZM);
+  r.style.setProperty('--vh', (h / ZM / 100) + 'px');
+  r.style.setProperty('--vw', (w / ZM / 100) + 'px');
+}
+fitWin(); addEventListener('resize', fitWin);
+
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.42', ['小窗、分屏時整個畫面等比例縮小，按鈕不會變得很大把要看的內容擠小', '縮小時左右滑換張、點兩下快轉的位置也跟著對準']],
   ['YTD_V0.1.11（外殼）／YTD_UI_V0.1.41', ['支援小米三指分屏、小窗：可以跟其他 App 一起開', '分屏時播放影片不會再強制轉橫向（避免分屏被退出）']],
   ['YTD_UI_V0.1.40', ['一次丟好幾個時，大畫面改顯示「這一批」的總進度（完成幾個／共幾個、合計速度），下面清單照順序列出每一個（包含已完成的），另有「全部取消」']],
   ['YTD_UI_V0.1.39', ['下載頁的大畫面下面多了「排隊清單」：其他正在下載、排隊中的都看得到，可以個別取消', '同時下載預設改成 3 個，並依平台自動限制：YouTube 最多 2 個（每個本身已經多線）、Telegram 最多 3 個、IG 一次 1 個（慢慢抓）']],
@@ -970,7 +988,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
       g.mode = pagerOn() ? 'pan' : v && v.dataset.s && isFinite(v.duration) ? 'seek' : 'swipe';
       g.lx = e.clientX; g.lt = now; if (v) g.base = g.tgt = v.currentTime;
     }
-    if (g.mode === 'pan') { pager.drag = (pager.idx === 0 && dx > 0) ? dx * 0.3 : dx; pagerSet(0); return; }   // 一頁一張：跟著手指動
+    if (g.mode === 'pan') { pager.drag = ((pager.idx === 0 && dx > 0) ? dx * 0.3 : dx) / ZM; pagerSet(0); return; }   // 一頁一張：跟著手指動
     if (g.mode === 'seek' && v) {
       const step = e.clientX - g.lx, dt = Math.max(now - g.lt, 1), sp = Math.abs(step) / dt;
       const maxGain = Math.min(4, Math.max(0.06, v.duration / 400)), k = Math.min(1, Math.max(0, (sp - 0.12) / 1.4));
@@ -986,7 +1004,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
     const h = el.querySelector('.st-hint'); if (h) h.hidden = true;
     if (gg.mode === 'pan') {                                                  // 放手：滑夠遠或滑得快就換一張，不然彈回去
       const dx = cancel ? 0 : e.clientX - gg.x0, fast = Math.abs(dx) / Math.max(1, performance.now() - gg.t0) > 0.4;
-      const go = (Math.abs(dx) > stageEl.clientWidth * 0.18 || (fast && Math.abs(dx) > 20)) ? (dx < 0 ? 1 : -1) : 0;
+      const go = (Math.abs(dx) > stageEl.clientWidth * ZM * 0.18 || (fast && Math.abs(dx) > 20)) ? (dx < 0 ? 1 : -1) : 0;
       pagerGo(pager.idx + go, 280, false); return;
     }
     const j = curJob(); if (cancel || !j) return;
@@ -1483,7 +1501,7 @@ function pEnd(e, cancel) {
   if (g.mode === 'seek') { if (isFinite(pv.duration)) pv.currentTime = g.tgt; pUi(); return; }
   if (g.mode === 'swipe') { pStep(e.clientX - g.x0 < 0 ? 1 : -1); return; }
   if (g.mode === 'down') { if (e.clientY - g.y0 > 110) pClose(); return; }
-  const now = performance.now(), w = pEl.clientWidth;
+  const now = performance.now(), w = pEl.clientWidth * ZM;
   if (now - lastTap < 300 && !pv.hidden) { clearTimeout(tapT); lastTap = 0; if (e.clientX < w * 0.35) pJump(-10); else if (e.clientX > w * 0.65) pJump(10); else pToggle(); }
   else { lastTap = now; tapT = setTimeout(() => { if (pEl.classList.contains('ui') && !pv.hidden && !pv.paused) { clearTimeout(P.uiT); pEl.classList.remove('ui'); } else pUi(); }, 300); }
 }
