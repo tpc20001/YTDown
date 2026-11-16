@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.58';
+const UI_VER = 'YTD_UI_V0.1.59';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.59', ['紀錄改成「新的在最下面、舊的在上面」（像 IG、抖音），打開紀錄頁會直接到最下面（最新的）；要看更舊的，捲到最上面按「再顯示 100 筆較舊的」', '播放時往上滑＝下一則（比較新的）、往下滑＝上一則（比較舊的），跟紀錄頁的順序一樣', '排序選單可以換回「新的在最上面」']],
   ['YTD_UI_V0.1.58', ['播放器改成像抖音：在畫面任何地方往上滑＝下一則（較舊）、往下滑＝上一則（較新），照紀錄頁的順序；左右滑一樣是拖進度（照片是換張）。手機、平板、橫的影片都一樣', '關掉播放器改用左上角 ✕ 或返回鍵（不是從紀錄打開的單一個檔，往下滑一樣是關掉）', '🎛 轉盤和左下角上一則／下一則先收起來，工具列的 🎛 可以叫回來（轉盤也調大了一點）']],
   ['YTD_UI_V0.1.57', ['左邊的上一則／下一則縮成很小一塊，貼在最左下角（每半大約 1.6 公分），拇指一定搆得到']],
   ['YTD_UI_V0.1.56', ['防呆：返回鍵最多只會回到下載頁（貼上的那一頁），按幾次都不會把 YT Download 關掉；分屏時誤按也不會讓左邊的視窗不見']],
@@ -257,7 +258,7 @@ const PAGES = ['dl', 'hist', 'sites', 'upd', 'set'];
 function page(p) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.p === p));
   document.querySelectorAll('.pg').forEach(s => s.classList.toggle('on', s.id === 'p_' + p));
-  if (p === 'hist') drawHist();
+  if (p === 'hist') { hShow = 100; drawHist(); histToBottom(); }
   if (p === 'sites') drawSites();
   if (p === 'set' || p === 'upd') drawSet();
   if (p !== 'dl') { autoStop(); stagePause(); }
@@ -1238,7 +1239,10 @@ function drawHist() {
   $('#hCount').textContent = H.length ? `${L.length} / ${H.length} 筆` : '';
   $('#bHClr').hidden = !H.length;
   hOrder = L.map(hKey); const W = watched();
-  $('#hist').innerHTML = L.length ? L.slice(0, hShow).map(h => {
+  // 「新的在最下面」（像 IG、抖音往下滑）：顯示最後 hShow 筆，較舊的按最上面的按鈕再載入
+  const bottomNew = so === 'old', shown = bottomNew ? L.slice(Math.max(0, L.length - hShow)) : L.slice(0, hShow);
+  const moreBtn = more ? `<button class="btn big" type="button" id="hMore">再顯示 100 筆${bottomNew ? '較舊的' : ''}（還有 ${L.length - hShow} 筆）</button>` : '';
+  $('#hist').innerHTML = L.length ? (bottomNew ? moreBtn : '') + shown.map(h => {
     const f = h.files && h.files[0], total = szOf(h);
     const Mw = h.ok && !h.gone ? mediaOf(h.files) : [], nw = Mw.filter(x => isW(W, x)).length, seenTag = nw ? `<span class="seen-b">✓ 看過${Mw.length > 1 ? ` ${nw}/${Mw.length}` : ''}</span>` : '';
     const M = h.ok && !h.gone ? mediaOf(h.files) : [], multi = M.length > 1;
@@ -1251,8 +1255,11 @@ function drawHist() {
       ${hAsk === h.i ? `<div class="ask"><span>刪掉手機裡的檔案？刪了就找不回來。</span><button class="btn sm danger" data-a="delYes" type="button">刪掉</button><button class="btn sm ghost" data-a="delNo" type="button">取消</button></div>` : ''}
       <div class="acts">${h.ok && f && !h.gone ? '<button class="btn" data-a="open" type="button">播放</button><button class="btn ghost" data-a="share" type="button">分享</button>' : ''}<button class="btn ghost" data-a="again" type="button">再下載</button><button class="btn ghost" data-a="copy" type="button">複製連結</button>${h.ok && f && !h.gone && has('deleteFile') ? '<button class="btn ghost" data-a="delFile" type="button">刪檔案</button>' : ''}<button class="btn ghost" data-a="del" type="button">刪紀錄</button></div>
     </div></div>`;
-  }).join('') + (more ? `<button class="btn big" type="button" id="hMore">再顯示 100 筆（還有 ${L.length - hShow} 筆）</button>` : '') : `<p class="empty">${H.length ? '沒有符合的紀錄' : '還沒有下載紀錄'}</p>`;
-  const hm = $('#hMore'); if (hm) hm.onclick = () => { hShow += 100; drawHist(); };
+  }).join('') + (bottomNew ? '' : moreBtn) : `<p class="empty">${H.length ? '沒有符合的紀錄' : '還沒有下載紀錄'}</p>`;
+  const hm = $('#hMore'); if (hm) hm.onclick = () => {
+    const keep = document.documentElement.scrollHeight - window.scrollY;                 // 載入較舊的之後，畫面停在原本看的地方
+    hShow += 100; drawHist(); if (bottomNew) window.scrollTo(0, document.documentElement.scrollHeight - keep);
+  };
   wireVThumbs();
 }
 $('#hist').onclick = e => {
@@ -1273,7 +1280,9 @@ $('#hist').onclick = e => {
 };
 $('#hSearch').addEventListener('input', () => { hShow = 100; drawHist(); });
 $('#hSort').onchange = () => { hShow = 100; LS('hsort', $('#hSort').value); drawHist(); };
-{ const v = LS('hsort'); if (v) $('#hSort').value = v; }
+{ if (!LS('hsortV2')) { LS('hsort', 'old'); LS('hsortV2', 1); } const v = LS('hsort') || 'old'; $('#hSort').value = v; }
+// 打開紀錄頁：「新的在最下面」時直接捲到最下面（縮圖載入後再補捲一次）
+function histToBottom() { if ($('#hSort').value !== 'old') return; const go = () => window.scrollTo(0, document.documentElement.scrollHeight); go(); setTimeout(go, 120); setTimeout(go, 600); }
 $('#bHClr').onclick = () => $('#hClrAsk').hidden = false;
 $('#bHClrNo').onclick = () => $('#hClrAsk').hidden = true;
 $('#bHClrYes').onclick = () => { LS('hist', []); $('#hClrAsk').hidden = true; drawHist(); toast('紀錄已清空'); };
@@ -1719,11 +1728,11 @@ function histStep(d) {
   let k = c.at, h = null;
   while (true) {
     k += d;
-    if (k < 0 || k >= c.order.length) { pNavHint(d < 0 ? '已經是最新的一則' : '已經是最舊的一則'); call('vibrate', 60); return false; }
+    if (k < 0 || k >= c.order.length) { pNavHint(d < 0 ? '已經是第一則了' : '已經是最後一則了'); call('vibrate', 60); return false; }
     h = get(k); if (h && h.ok && !h.gone && mediaOf(h.files).length) break;
   }
   pPos(true); c.at = k; P.list = mediaOf(h.files); P.i = 0; P.title = h.title || '';
-  pLoad(); pNavHint((d < 0 ? '▲ 較新：' : '▼ 較舊：') + (h.title || '')); call('vibrate', 20);
+  pLoad(); pNavHint((d < 0 ? '▲ 上一則：' : '▼ 下一則：') + (h.title || '')); call('vibrate', 20);
   return true;
 }
 ['pointerdown', 'pointerup'].forEach(ev => $('#pNav').addEventListener(ev, e => e.stopPropagation()));
