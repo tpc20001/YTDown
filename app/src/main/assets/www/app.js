@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.42';
+const UI_VER = 'YTD_UI_V0.1.43';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.43', ['播放時左右滑（或拖進度條）手壓著，畫面會跟著換到那個時間點，放開就從那裡開始播；方便找關鍵畫面', '速度：點右下的 1x，用 －／＋ 每次調 0.1 倍（0.25～4 倍），或直接點 0.5／1／1.25／1.5／2，會記住', '長按畫面＝暫時 2 倍速，放開恢復', '新按鈕：◀▮ ▮▶ 逐格看、A-B 重複一段、🔁 整部重複、⛶ 填滿畫面（會記住）', '下載頁大畫面拖進度也一樣會跟著換畫面']],
   ['YTD_UI_V0.1.42', ['小窗、分屏時整個畫面等比例縮小，按鈕不會變得很大把要看的內容擠小', '縮小時左右滑換張、點兩下快轉的位置也跟著對準']],
   ['YTD_V0.1.11（外殼）／YTD_UI_V0.1.41', ['支援小米三指分屏、小窗：可以跟其他 App 一起開', '分屏時播放影片不會再強制轉橫向（避免分屏被退出）']],
   ['YTD_UI_V0.1.40', ['一次丟好幾個時，大畫面改顯示「這一批」的總進度（完成幾個／共幾個、合計速度），下面清單照順序列出每一個（包含已完成的），另有「全部取消」']],
@@ -972,7 +973,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
   // 大畫面上的操作：影片就在這一塊播放（不放大）。點一下＝播放／暫停；播放過後左右滑＝快轉；沒在播時左右滑＝換張
   const el = stageEl;
   const hint = (v, t, d) => { const h = el.querySelector('.st-hint'); if (!h) return; h.hidden = false; h.innerHTML = `<b>${fmtDur(t) || '0:00'}</b> / ${fmtDur(v.duration) || '0:00'}<span>${d >= 0 ? '+' : '−'}${fmtDur(Math.abs(d)) || '0:00'}</span>`; };
-  el.addEventListener('input', e => { if (!e.target.classList.contains('st-bar')) return; const v = stageVid(); if (v && isFinite(v.duration)) { v.currentTime = e.target.value / 1000 * v.duration; el.querySelector('.st-cur').textContent = fmtDur(v.currentTime) || '0:00'; } });
+  el.addEventListener('input', e => { if (!e.target.classList.contains('st-bar')) return; const v = stageVid(); if (v && isFinite(v.duration)) { const t = e.target.value / 1000 * v.duration; scrubStart(v); scrubTo(v, t); el.querySelector('.st-cur').textContent = fmtDur(t) || '0:00'; } });
+  el.addEventListener('change', e => { if (!e.target.classList.contains('st-bar')) return; const v = stageVid(); if (v && isFinite(v.duration)) scrubEnd(v, e.target.value / 1000 * v.duration); });
   el.addEventListener('pointerdown', e => {
     autoStop();                                                             // 手一碰就不再自動播
     if (e.target.closest('.st-ctl')) return;
@@ -987,6 +989,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
       if (!(Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2)) return;
       g.mode = pagerOn() ? 'pan' : v && v.dataset.s && isFinite(v.duration) ? 'seek' : 'swipe';
       g.lx = e.clientX; g.lt = now; if (v) g.base = g.tgt = v.currentTime;
+      if (g.mode === 'seek') scrubStart(v);
     }
     if (g.mode === 'pan') { pager.drag = ((pager.idx === 0 && dx > 0) ? dx * 0.3 : dx) / ZM; pagerSet(0); return; }   // 一頁一張：跟著手指動
     if (g.mode === 'seek' && v) {
@@ -996,7 +999,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
       hint(v, g.tgt, g.tgt - g.base);
       const bar = el.querySelector('.st-bar'); if (bar) bar.value = Math.round(g.tgt / v.duration * 1000);
       const cur = el.querySelector('.st-cur'); if (cur) cur.textContent = fmtDur(g.tgt) || '0:00';
-      if (now - g.applied > 160) { g.applied = now; v.currentTime = g.tgt; }
+      scrubTo(v, g.tgt);                                                   // 手壓著就跟著換畫面
     }
   });
   const end = (e, cancel) => {
@@ -1007,8 +1010,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
       const go = (Math.abs(dx) > stageEl.clientWidth * ZM * 0.18 || (fast && Math.abs(dx) > 20)) ? (dx < 0 ? 1 : -1) : 0;
       pagerGo(pager.idx + go, 280, false); return;
     }
+    if (gg.mode === 'seek') { scrubEnd(stageVid(), gg.tgt); return; }        // 放開＝從這裡開始播
     const j = curJob(); if (cancel || !j) return;
-    if (gg.mode === 'seek') { const v = stageVid(); if (v) v.currentTime = gg.tgt; return; }
     if (gg.mode === 'swipe') { if (Math.abs(e.clientX - gg.x0) > 40) stageStep(e.clientX - gg.x0 < 0 ? 1 : -1); return; }
     if (gg.fr && j.state === 'ok') {                                          // 點這一頁：影片＝播放／暫停，照片＝放大看
       const fv = gg.fr.querySelector('video');
@@ -1411,12 +1414,32 @@ $('#igDl').onclick = () => {
 };
 
 // =====================================================================
-// 內建播放器：影片、聲音、照片都在 App 裡看
-// 左右滑＝快轉（滑越快跳越多、越慢越精準）；點兩下左右＝跳 10 秒、中間＝播放暫停；往下滑＝關閉
+// 拖時間軸時的即時預覽：先暫停，上一格跳完（seeked）才跳下一格。
+// 以前每 0.16 秒硬跳一次，手機解碼來不及，一直被下一次蓋掉，畫面就停在按下去那一格。放開＝從那裡開始播。
 // =====================================================================
-const P = { list: [], i: 0, title: '', rate: 1, uiT: 0, land: false };
+function scrubStart(v) { if (!v) return; const s = v._sc || (v._sc = {}); if (!s.on) { s.on = true; s.was = !v.paused; } s.want = null; try { v.pause(); } catch (e) {} }
+function scrubTo(v, t) {
+  if (!v || !isFinite(t)) return; const s = v._sc || (v._sc = {});
+  if (v.seeking) { s.want = t; return; }
+  s.want = null; try { v.currentTime = t; } catch (e) {}
+}
+function scrubEnd(v, t, play) {
+  if (!v) return; const s = v._sc || {}; s.on = false; s.want = null;
+  if (isFinite(t)) { try { v.currentTime = t; } catch (e) {} }
+  if (play !== false) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+}
+document.addEventListener('seeked', e => {
+  const v = e.target, s = v && v._sc; if (!s || s.want == null) return;
+  const t = s.want; s.want = null; if (Math.abs(v.currentTime - t) > 0.04) { try { v.currentTime = t; } catch (x) {} }
+}, true);
+
+// =====================================================================
+// 內建播放器：影片、聲音、照片都在 App 裡看
+// 左右滑＝快轉（手壓著畫面跟著走，放開從那裡播）；點兩下左右＝跳 10 秒、中間＝播放暫停；往下滑＝關閉
+// 長按畫面＝暫時 2 倍速；速度可以 0.1 微調；逐格、A-B 重複、整部重複、填滿畫面
+// =====================================================================
+const P = { list: [], i: 0, title: '', rate: Math.min(4, Math.max(0.25, +LS('prate') || 1)), uiT: 0, land: false, a: null, b: null };
 const pEl = $('#player'), pv = $('#pv'), pim = $('#pi');
-const RATES = [1, 1.25, 1.5, 2, 0.5];
 function mimeGuess(n) { const e = (String(n || '').split('.').pop() || '').toLowerCase(); return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime', m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', ogg: 'audio/ogg', flac: 'audio/flac', wav: 'audio/wav', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic' })[e] || ''; }
 const mimeOf = f => (f && (f.mime && f.mime !== 'application/octet-stream' ? f.mime : mimeGuess(f.name))) || '';
 function playF(files, title, start) {
@@ -1436,11 +1459,11 @@ function pLoad() {
   pim.hidden = !img; pv.hidden = img; $('#pBot').hidden = img; $('#pPlay').hidden = img;
   if (has('fileExists') && !N.fileExists(f.uri)) { pFail('檔案已經被刪除或搬走了'); return; }
   if (img) { pv.pause(); pv.removeAttribute('src'); pv.load(); pim.src = f.uri; call('orient', 'auto'); pUi(true); }
-  else { pim.removeAttribute('src'); $('#pBar').value = 0; $('#pCur').textContent = '0:00'; $('#pDur').textContent = ''; pv.src = f.uri; pv.playbackRate = P.rate; const p = pv.play(); if (p && p.catch) p.catch(() => {}); pUi(); }
+  else { P.a = P.b = null; pAbUi(); $('#pRateBox').hidden = true; pim.removeAttribute('src'); $('#pBar').value = 0; $('#pCur').textContent = '0:00'; $('#pDur').textContent = ''; pv.src = f.uri; pv.playbackRate = P.rate; const p = pv.play(); if (p && p.catch) p.catch(() => {}); pUi(); }
 }
 function pFail(msg) { $('#pErrMsg').textContent = msg; $('#pErr').hidden = false; pUi(true); }
 function pStep(d) { if (P.list.length < 2) return; pPos(true); P.i = (P.i + d + P.list.length) % P.list.length; pLoad(); }
-function pClose() { pPos(true); pv.pause(); pv.removeAttribute('src'); pv.load(); pim.removeAttribute('src'); pEl.hidden = true; if ($('#igPane').hidden) document.body.classList.remove('locked'); call('orient', 'auto'); call('keepOn', false); call('immersive', false); if (!$('#p_hist').classList.contains('on')) return; }
+function pClose() { $('#pRateBox').hidden = true; pPos(true); pv.pause(); pv.removeAttribute('src'); pv.load(); pim.removeAttribute('src'); pEl.hidden = true; if ($('#igPane').hidden) document.body.classList.remove('locked'); call('orient', 'auto'); call('keepOn', false); call('immersive', false); if (!$('#p_hist').classList.contains('on')) return; }
 function pUi(sticky) { pEl.classList.add('ui'); clearTimeout(P.uiT); if (!sticky && !pv.hidden && !pv.paused) P.uiT = setTimeout(() => pEl.classList.remove('ui'), 3000); }
 function pToggle() { if (pv.paused) { const p = pv.play(); if (p && p.catch) p.catch(() => {}); } else pv.pause(); }
 function pJump(d) { if (!isFinite(pv.duration)) return; pv.currentTime = Math.min(pv.duration, Math.max(0, pv.currentTime + d)); pHint(pv.currentTime, d); setTimeout(() => { if (!gs) $('#pSeek').hidden = true; }, 600); }
@@ -1451,18 +1474,46 @@ pv.addEventListener('loadedmetadata', () => {
   P.land = pv.videoWidth > pv.videoHeight; call('orient', pv.videoWidth ? (P.land ? 'land' : 'port') : 'auto');
 });
 let pSaveT = 0;
-pv.addEventListener('timeupdate', () => { if (gs || !isFinite(pv.duration)) return; $('#pBar').value = Math.round(pv.currentTime / pv.duration * 1000); $('#pCur').textContent = fmtDur(pv.currentTime) || '0:00'; if (Date.now() - pSaveT > 5000) { pSaveT = Date.now(); pPos(true); } });
+pv.addEventListener('timeupdate', () => {
+  if (P.b != null && P.a != null && !gs && pv.currentTime >= P.b) { pv.currentTime = P.a; return; }    // A-B 重複
+  if (gs || !isFinite(pv.duration)) return; $('#pBar').value = Math.round(pv.currentTime / pv.duration * 1000); $('#pCur').textContent = fmtDur(pv.currentTime) || '0:00'; if (Date.now() - pSaveT > 5000) { pSaveT = Date.now(); pPos(true); } });
 pv.addEventListener('play', () => { $('#pPlay').textContent = '❚❚'; pUi(); });
 pv.addEventListener('pause', () => { $('#pPlay').textContent = '▶'; pUi(true); });
 pv.addEventListener('ended', () => { pPos(true); if (P.i + 1 < P.list.length) pStep(1); else pUi(true); });
 pv.addEventListener('error', () => { if (pv.getAttribute('src')) pFail('這個檔案在 App 裡播不了（格式不支援）。可以改用其他 App 開。'); });
 pim.addEventListener('error', () => { if (pim.getAttribute('src')) pFail('這張圖在 App 裡開不了。可以改用其他 App 開。'); });
-$('#pBar').addEventListener('input', () => { if (isFinite(pv.duration)) { pv.currentTime = $('#pBar').value / 1000 * pv.duration; $('#pCur').textContent = fmtDur(pv.currentTime) || '0:00'; pUi(); } });
+$('#pBar').addEventListener('input', () => { if (isFinite(pv.duration)) { const t = $('#pBar').value / 1000 * pv.duration; scrubStart(pv); scrubTo(pv, t); $('#pCur').textContent = fmtDur(t) || '0:00'; pUi(true); } });
+$('#pBar').addEventListener('change', () => { if (isFinite(pv.duration)) { scrubEnd(pv, $('#pBar').value / 1000 * pv.duration); pUi(); } });
 $('#pPlay').onclick = () => pToggle();
 $('#pPrev').onclick = () => pStep(-1);
 $('#pNext').onclick = () => pStep(1);
 $('#pClose').onclick = () => pClose();
-$('#pRate').onclick = () => { P.rate = RATES[(RATES.indexOf(P.rate) + 1) % RATES.length]; pv.playbackRate = P.rate; $('#pRate').textContent = P.rate + 'x'; pUi(); };
+// ---- 速度：－／＋ 每次 0.1，或直接點常用的；記住下次用
+function pRateSet(r) {
+  P.rate = Math.round(Math.min(4, Math.max(0.25, r)) * 100) / 100; LS('prate', P.rate);
+  pv.playbackRate = P.rate; pv.defaultPlaybackRate = P.rate; const t = (P.rate % 1 ? P.rate : P.rate.toFixed(1)) + 'x';
+  $('#pRate').textContent = t; $('#pRateVal').textContent = t;
+  document.querySelectorAll('#pRateBox [data-rv]').forEach(b => b.classList.toggle('on', +b.dataset.rv === P.rate));
+}
+$('#pRate').onclick = () => { $('#pRateBox').hidden = !$('#pRateBox').hidden; pRateSet(P.rate); pUi(true); };
+$('#pRateBox').onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.rs) pRateSet(P.rate + +b.dataset.rs); else if (b.dataset.rv) pRateSet(+b.dataset.rv); pUi(true); };
+pRateSet(P.rate);
+// ---- 逐格（找關鍵畫面）、A-B 重複、整部重複、填滿畫面
+const pFrame = d => { if (!isFinite(pv.duration)) return; pv.pause(); scrubTo(pv, Math.min(pv.duration, Math.max(0, pv.currentTime + d / 30))); setTimeout(() => { $('#pCur').textContent = fmtDur(pv.currentTime) || '0:00'; $('#pBar').value = Math.round(pv.currentTime / pv.duration * 1000); pHint(pv.currentTime, d / 30); setTimeout(() => { if (!gs) $('#pSeek').hidden = true; }, 700); }, 120); pUi(true); };
+$('#pFrB').onclick = () => pFrame(-1);
+$('#pFrF').onclick = () => pFrame(1);
+function pAbUi() { const b = $('#pAB'); b.textContent = P.a == null ? 'A-B' : P.b == null ? `A ${fmtDur(P.a) || '0:00'} → B?` : `A-B ${fmtDur(P.a) || '0:00'}~${fmtDur(P.b) || '0:00'}`; b.classList.toggle('on', P.a != null); }
+$('#pAB').onclick = () => {
+  const t = pv.currentTime || 0;
+  if (P.a == null) { P.a = t; toast('起點 A 設好了，播到終點再按一次', 2200); }
+  else if (P.b == null) { if (t <= P.a + 0.3) { toast('終點要在起點後面'); return; } P.b = t; pv.currentTime = P.a; toast('A-B 這段會一直重複，再按一次取消', 2200); }
+  else { P.a = P.b = null; toast('取消 A-B 重複'); }
+  pAbUi(); pUi(true);
+};
+$('#pLoop').onclick = () => { pv.loop = !pv.loop; LS('ploop', pv.loop); $('#pLoop').classList.toggle('on', pv.loop); toast(pv.loop ? '這部會一直重複播' : '不重複'); pUi(); };
+$('#pFit').onclick = () => { const on = !pEl.classList.contains('fill'); pEl.classList.toggle('fill', on); LS('pfill', on); $('#pFit').classList.toggle('on', on); toast(on ? '填滿畫面（邊邊會切掉）' : '完整顯示'); pUi(); };
+pv.loop = !!LS('ploop'); $('#pLoop').classList.toggle('on', pv.loop);
+if (LS('pfill')) { pEl.classList.add('fill'); $('#pFit').classList.add('on'); }
 $('#pRot').onclick = () => { P.land = !P.land; call('orient', P.land ? 'land' : 'port'); pUi(); };
 $('#pRot').hidden = !has('orient');
 const pExt = () => { const f = P.list[P.i]; if (f) { pv.pause(); openF(f); } };
@@ -1470,8 +1521,15 @@ $('#pExt').onclick = pExt; $('#pErrBtn').onclick = pExt;
 // ---- 手勢
 let gs = null, lastTap = 0, tapT = 0;
 pEl.addEventListener('pointerdown', e => {
-  if (e.target.closest('button,input,#pErr')) return;
+  if (e.target.closest('button,input,#pErr,#pRateBox')) return;
+  if (!$('#pRateBox').hidden) { $('#pRateBox').hidden = true; }
   gs = { x0: e.clientX, y0: e.clientY, lx: e.clientX, lt: performance.now(), mode: '', base: pv.currentTime || 0, tgt: pv.currentTime || 0, applied: 0 };
+  const g0 = gs;
+  gs.lp = setTimeout(() => {                                                    // 長按（沒在滑）＝暫時 2 倍速，放開恢復
+    if (gs !== g0 || g0.mode || pv.hidden || pv.paused) return;
+    g0.mode = 'fast'; pv.playbackRate = Math.min(4, P.rate * 2);
+    const el = $('#pSeek'); el.hidden = false; el.innerHTML = `<b>${pv.playbackRate}x</b><span>▶▶ 放開恢復</span>`; call('vibrate', 20);
+  }, 450);
   try { pEl.setPointerCapture(e.pointerId); } catch (x) {}
 });
 pEl.addEventListener('pointermove', e => {
@@ -1481,8 +1539,11 @@ pEl.addEventListener('pointermove', e => {
     if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2) gs.mode = pv.hidden ? 'swipe' : 'seek';
     else if (dy > 24 && Math.abs(dy) > Math.abs(dx) * 1.5) gs.mode = 'down';
     else return;
+    clearTimeout(gs.lp);
     gs.lx = e.clientX; gs.lt = now; gs.base = gs.tgt = pv.currentTime || 0;
+    if (gs.mode === 'seek') scrubStart(pv);
   }
+  if (gs.mode === 'fast') return;
   if (gs.mode === 'seek' && isFinite(pv.duration)) {
     const step = e.clientX - gs.lx, dt = Math.max(now - gs.lt, 1), v = Math.abs(step) / dt;      // 手指速度（像素／毫秒）
     const maxGain = Math.min(4, Math.max(0.06, pv.duration / 400));                               // 長片快滑一次能跳比較遠
@@ -1491,14 +1552,16 @@ pEl.addEventListener('pointermove', e => {
     gs.tgt = Math.min(pv.duration, Math.max(0, gs.tgt + step * gain)); gs.lx = e.clientX; gs.lt = now;
     pHint(gs.tgt, gs.tgt - gs.base);
     $('#pBar').value = Math.round(gs.tgt / pv.duration * 1000); $('#pCur').textContent = fmtDur(gs.tgt) || '0:00';
-    if (now - gs.applied > 160) { gs.applied = now; pv.currentTime = gs.tgt; }                    // 邊滑邊看畫面
+    scrubTo(pv, gs.tgt);                                                                          // 手壓著，畫面跟著走
   }
 });
 function pEnd(e, cancel) {
   const g = gs; gs = null; if (!g) return;
+  clearTimeout(g.lp);
   $('#pSeek').hidden = true;
+  if (g.mode === 'fast') { pv.playbackRate = P.rate; return; }
+  if (g.mode === 'seek') { scrubEnd(pv, isFinite(pv.duration) ? g.tgt : NaN); pUi(); return; }      // 放開＝從這裡開始播
   if (cancel) return;
-  if (g.mode === 'seek') { if (isFinite(pv.duration)) pv.currentTime = g.tgt; pUi(); return; }
   if (g.mode === 'swipe') { pStep(e.clientX - g.x0 < 0 ? 1 : -1); return; }
   if (g.mode === 'down') { if (e.clientY - g.y0 > 110) pClose(); return; }
   const now = performance.now(), w = pEl.clientWidth * ZM;

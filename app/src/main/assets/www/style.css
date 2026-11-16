@@ -223,7 +223,16 @@ body.locked{overflow:hidden}
 .p-top{top:0;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 22px;background:linear-gradient(#000c,#0000)}
 .p-top span{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .p-bot{bottom:0;display:flex;align-items:center;gap:10px;padding:22px 14px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(#0000,#000c);font-size:13px;font-variant-numeric:tabular-nums}
+.p-bot{flex-wrap:wrap}
 .p-bot input{flex:1;min-width:0;accent-color:#4dc9ff;height:28px}
+.p-tools{width:100%;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+.p-tools button{padding:6px 12px;font-size:13px}
+.p-tools button.on,.p-rate button.on{background:#4dc9ff;color:#04121b}
+.player.fill video{object-fit:cover}
+.p-rate{position:absolute;right:12px;bottom:calc(118px + env(safe-area-inset-bottom,0px));z-index:3;background:rgba(10,12,14,.92);border:1px solid #2a2e35;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.p-rate-row{display:flex;align-items:center;justify-content:center;gap:6px}
+.p-rate-row b{min-width:64px;text-align:center;font-size:18px;font-variant-numeric:tabular-nums}
+.p-rate-row button{padding:6px 10px;min-width:42px}
 .player button{background:rgba(255,255,255,.14);border:0;color:#fff;border-radius:999px;padding:8px 14px;font-size:14px;cursor:pointer}
 .p-mid{top:50%;transform:translateY(-50%);display:flex;justify-content:center;align-items:center;gap:34px;pointer-events:none!important}
 .player.ui .p-mid button{pointer-events:auto}
