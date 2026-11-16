@@ -375,6 +375,8 @@ class MainActivity : AppCompatActivity() {
         // ---- 內建播放器用：轉向、螢幕不關、全螢幕
         @JavascriptInterface fun orient(mode: String) {
             runOnUiThread {
+                // 分屏／小窗時不強制轉向，不然小米會把分屏退出或變成黑邊
+                if (Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode) { requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED; return@runOnUiThread }
                 requestedOrientation = when (mode) {
                     "land" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     "port" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT

@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.39';
+const UI_VER = 'YTD_UI_V0.1.41';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,6 +13,7 @@ const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.11（外殼）／YTD_UI_V0.1.41', ['支援小米三指分屏、小窗：可以跟其他 App 一起開', '分屏時播放影片不會再強制轉橫向（避免分屏被退出）']],
   ['YTD_UI_V0.1.40', ['一次丟好幾個時，大畫面改顯示「這一批」的總進度（完成幾個／共幾個、合計速度），下面清單照順序列出每一個（包含已完成的），另有「全部取消」']],
   ['YTD_UI_V0.1.39', ['下載頁的大畫面下面多了「排隊清單」：其他正在下載、排隊中的都看得到，可以個別取消', '同時下載預設改成 3 個，並依平台自動限制：YouTube 最多 2 個（每個本身已經多線）、Telegram 最多 3 個、IG 一次 1 個（慢慢抓）']],
   ['YTD_UI_V0.1.38', ['Telegram 登入後不再先預覽，貼上就直接下載', '預覽失敗不再顯示紅字（只有需要你處理的，例如要登入，才會提示）', '回到 App 時多讀幾次剪貼簿，平板上也能穩定自動下載']],
