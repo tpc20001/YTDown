@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.50';
+const UI_VER = 'YTD_UI_V0.1.51';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.51', ['橫的影片不再自動轉成橫向全螢幕，照你手上拿的方向（直的）播放', '想要橫向最大畫面看：按右下角的 ⟳，再按一次轉回來']],
   ['YTD_UI_V0.1.50', ['下載頁的「📋 貼上」變成一個超大的按鈕，放在最上面', '按下去會有 1.5 秒的動畫和震動：綠色「＋1 第 N 個」＝加進去了，黃色＝這個已經加過了，紅色＝剪貼簿沒有網址']],
   ['YTD_V0.1.14（外殼）／YTD_UI_V0.1.49', ['🧪 新的「🪟 分屏」：挑一個 App（例如 Telegram），YT Download 會請系統把它開在旁邊，平板上會直接進分屏，手機分身裡也可以試', '長按 YT Download 圖示多了「分屏」捷徑，拖到桌面就是一鍵分屏（跟上次選的 App）']],
   ['YTD_V0.1.13（外殼）／YTD_UI_V0.1.48', ['一次按下載的多個網址（或分享進來的多個、IG 帳號勾選的多則）算成一組：紀錄裡合成一筆，所有照片影片放在一起，標出幾個網址、幾個失敗；再下載、複製連結也是整組', '新的「📋 連續收集」：打開後，在別的 App 複製網址，回到 YT Download（小窗點一下就好）就自動加進去，不用再按貼上；收完按一次下載＝一組', '外殼：小窗被點到時也會讀剪貼簿（以前要整個 App 回到前面才讀）']],
@@ -1558,7 +1559,7 @@ function pHint(t, d) { const el = $('#pSeek'); el.hidden = false; el.innerHTML =
 pv.addEventListener('loadedmetadata', () => {
   $('#pDur').textContent = fmtDur(pv.duration) || '0:00';
   const p = pPos(); if (p > 5 && p < pv.duration - 10) { pv.currentTime = p; toast('從上次看到的 ' + fmtDur(p) + ' 繼續', 2000); }
-  P.land = pv.videoWidth > pv.videoHeight; call('orient', pv.videoWidth ? (P.land ? 'land' : 'port') : 'auto');
+  P.land = false; call('orient', 'auto');                                       // 不自動轉橫向：照你手上拿的方向播，要全螢幕橫看再按 ⟳
 });
 let pSaveT = 0;
 pv.addEventListener('timeupdate', () => {
