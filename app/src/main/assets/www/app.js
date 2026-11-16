@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.56';
+const UI_VER = 'YTD_UI_V0.1.57';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.57', ['左邊的上一則／下一則縮成很小一塊，貼在最左下角（每半大約 1.6 公分），拇指一定搆得到']],
   ['YTD_UI_V0.1.56', ['防呆：返回鍵最多只會回到下載頁（貼上的那一頁），按幾次都不會把 YT Download 關掉；分屏時誤按也不會讓左邊的視窗不見']],
   ['YTD_UI_V0.1.55', ['左邊的上一則／下一則縮成原本「下一則」那一段的大小，上半＝較新、下半＝較舊，整組再往下一點，拇指比較按得到', '🎛 轉盤改成扁的橢圓：比較矮、貼著底邊往右延伸，不會只擠在左下角']],
   ['YTD_UI_V0.1.54', ['大「貼上」按鈕改成暗色（深色底＋淡藍邊框），晚上用不刺眼；按下去的綠／黃／紅提示也調暗了']],
@@ -1587,7 +1588,7 @@ function pPos(save) { const f = P.list[P.i]; if (!f || pv.hidden) return 0; cons
   if (isFinite(pv.duration) && pv.duration > 60) { if (pv.currentTime > 5 && pv.currentTime < pv.duration - 10) M[f.uri] = Math.floor(pv.currentTime); else delete M[f.uri]; const K = Object.keys(M); if (K.length > 300) delete M[K[0]]; LS('pos', M); } return 0; }
 function pLoad() {
   const f = P.list[P.i], img = mimeOf(f).startsWith('image/');
-  markW(f.uri); $('#pNav').hidden = !P.hctx;
+  markW(f.uri); $('#pNav').hidden = !P.hctx; pEl.classList.toggle('hasnav', !!P.hctx);
   $('#pErr').hidden = true; $('#pSeek').hidden = true;
   $('#pTitle').textContent = (P.list.length > 1 ? `${P.i + 1}/${P.list.length}　` : '') + (P.title || f.name || '');
   $('#pPrev').hidden = $('#pNext').hidden = P.list.length < 2;
