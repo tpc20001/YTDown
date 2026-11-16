@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>遠端</title>
+<!-- 📡 遠端網頁：電腦瀏覽器看、控制手機上的 App。資料都從 /api/xxx 來（kit.js 的 kit.remote.api） -->
+<style>
+:root{--bg:#16181d;--surf:#1f2228;--surf2:#2a2e36;--line:#343944;--fg:#eef0f3;--mut:#9097a3;--acc:#e51e63;--ok:#40c057;--bad:#fa5252;--warn:#fab005;color-scheme:dark}
+:root[data-theme=light]{--bg:#f3f4f6;--surf:#fff;--surf2:#eceef1;--line:#d9dce1;--fg:#15171a;--mut:#5f6672;--ok:#2b8a3e;--bad:#c92a2a;--warn:#b77d00;color-scheme:light}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,"Noto Sans TC",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--surf);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap}
+header b{font-size:16px;margin-right:8px}
+nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+nav button,.btn{border:1px solid var(--line);background:var(--surf2);color:var(--fg);border-radius:10px;padding:6px 12px;font:inherit;font-size:14px;cursor:pointer}
+nav button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}.btn.sm{padding:4px 9px;font-size:13px}
+main{max-width:980px;margin:0 auto;padding:12px}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.card>b:first-child{display:block;margin-bottom:6px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.mut{color:var(--mut)}.small{font-size:12.5px}.grow{flex:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.stat b{display:block;font-size:22px}
+table{width:100%;border-collapse:collapse}td,th{padding:7px 6px;border-top:1px solid var(--line);text-align:left;font-size:14px;vertical-align:middle}
+th{color:var(--mut);font-weight:500;border-top:0}
+.p{height:6px;border-radius:9px;background:var(--surf2);overflow:hidden;min-width:80px}.p i{display:block;height:100%;background:var(--acc)}
+.tag{font-size:12px;padding:1px 8px;border-radius:9px;background:var(--surf2);color:var(--mut)}.tag.ok{color:var(--ok)}.tag.warn{color:var(--warn)}
+input,select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 9px}
+pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:65vh;overflow:auto;font-size:12.5px}
+#login{max-width:320px;margin:15vh auto;text-align:center}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 16px;border-radius:99px}
+canvas{width:100%;height:180px}
+</style>
+</head>
+<body>
+<div id="login" class="card" hidden>
+  <b id="lgName">遠端</b><p class="mut">輸入手機 App 設定的 PIN</p>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" style="width:100%;text-align:center;font-size:20px">
+  <div class="row" style="justify-content:center"><button class="btn pri" id="lgGo">登入</button></div><p id="lgMsg" class="mut"></p>
+</div>
+<div id="app" hidden>
+<header><b id="name">遠端</b><nav id="tabs"></nav><button class="btn sm" id="theme">◐</button><button class="btn sm" id="out">登出</button></header>
+<main id="main"></main>
+</div>
+<div id="toast" hidden></div>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtSize = b => { b = +b || 0; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (b >= 1024 && i < 4) { b /= 1024; i++; } return (i ? b.toFixed(1) : b) + ' ' + u[i]; };
+const fmtTime = t => t ? new Date(t).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+let toastT = 0; const toast = m => { const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3000); };
+async function api(path, body) {
+  const r = await fetch('/api/' + path, body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) });
+  if (r.status === 401) { showLogin(); throw new Error('login'); }
+  return r.json();
+}
+function showLogin() { $('#app').hidden = true; $('#login').hidden = false; $('#pin').focus(); }
+$('#lgGo').onclick = async () => {
+  const r = await (await fetch('/login', { method: 'POST', body: JSON.stringify({ pin: $('#pin').value }) })).json();
+  if (r.ok) { $('#login').hidden = true; start(); } else $('#lgMsg').textContent = r.msg || 'PIN 不對';
+};
+$('#pin').onkeydown = e => { if (e.key === 'Enter') $('#lgGo').click(); };
+$('#out').onclick = async () => { await fetch('/logout'); showLogin(); };
+$('#theme').onclick = () => { const l = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light'; document.documentElement.dataset.theme = l; localStorage.setItem('theme', l); };
+document.documentElement.dataset.theme = localStorage.getItem('theme') || 'dark';
+
+// 分頁：rXxx(again) 每 2 秒用 again=true 再叫一次（只想畫一次的開頭寫 if (again) return）
+const TABS = [['home', '首頁'], ['bg', '後台'], ['perf', '效能'], ['set', '設定'], ['log', 'LOG'], ['upd', '更新']];
+let cur = localStorage.getItem('tab') || 'home';
+function drawTabs() { $('#tabs').innerHTML = TABS.map(([k, n]) => `<button data-tab="${k}" class="${k === cur ? 'on' : ''}">${n}</button>`).join(''); }
+$('#tabs').onclick = e => { const b = e.target.closest('[data-tab]'); if (!b) return; cur = b.dataset.tab; localStorage.setItem('tab', cur); drawTabs(); render(false); };
+const R = {};
+async function render(again) { try { await R[cur](again); } catch (e) { if (e.message !== 'login' && !again) $('#main').innerHTML = `<div class="card">出錯了：${esc(e.message)}</div>`; } }
+async function start() {
+  $('#app').hidden = false;
+  try { const b = await (await fetch('/brand.json')).json(); document.title = (b.title || b.name) + '（遠端）'; $('#name').textContent = b.title || b.name; if (b.accent) document.documentElement.style.setProperty('--acc', b.accent); } catch (e) {}
+  drawTabs(); render(false);
+}
+setInterval(() => { if (!$('#app').hidden && !document.hidden) render(true); }, 2000);
+
+R.home = async again => {
+  const [s, h] = await Promise.all([api('state'), api('home')]);
+  if (!again) $('#main').innerHTML = `<div class="card"><div class="row"><span id="hv" class="grow mut small"></span></div><div id="hc" class="grid"></div><div id="hb" class="row"></div></div><div class="card"><b>後台</b><div id="hg" class="small"></div><div id="hk"></div></div>`;
+  $('#hv').textContent = `畫面 ${s.ui}　外殼 S${s.shell}　手機現在在「${s.page}」頁${s.cloud ? '　☁ 雲端最新 ' + s.cloud.version : ''}`;
+  $('#hc').innerHTML = (h.cards || []).map(c => `<div class="card stat"><small class="mut">${esc(c.title)}</small><b>${esc(c.value)}</b><small class="mut">${esc(c.sub || '')}</small></div>`).join('');
+  if (!again) $('#hb').innerHTML = (h.buttons || []).map(b => `<button class="btn pri" data-home="${esc(b.act)}">${esc(b.label)}</button>`).join('');
+  $('#hg').textContent = '⚖ ' + s.gov.line;
+  $('#hk').innerHTML = s.kinds.map(k => `<div>${k.icon} ${esc(k.name)}：跑 ${k.run}、排 ${k.queue}${k.paused ? '（暫停）' : ''}</div>`).join('');
+};
+document.addEventListener('click', async e => {
+  const h = e.target.closest('[data-home]'); if (h) { const r = await api('home_act', { act: h.dataset.home }); if (r.msg) toast(r.msg); render(true); return; }
+  const a = e.target.closest('[data-act]'); if (a) { const d = JSON.parse(a.dataset.act); const r = await api('act', d); if (!r.ok) toast(r.msg || '失敗'); render(true); }
+});
+const A = o => esc(JSON.stringify(o));
+R.bg = async again => {
+  const s = await api('state');
+  if (!again) $('#main').innerHTML = `<div class="card"><div class="row"><b class="grow">總控制</b><button class="btn sm" data-act="${A({ act: 'pause_all' })}">⏸ 全部暫停</button><button class="btn sm" data-act="${A({ act: 'resume_all' })}">▶ 全部繼續</button></div><div id="bgG" class="small"></div>
+    <table><thead><tr><th>工作</th><th>狀態</th><th>跑／排</th><th>停在哪</th><th></th></tr></thead><tbody id="bgK"></tbody></table></div>
+    <div class="card"><div class="row"><b class="grow">最近的工作</b><button class="btn sm" data-act="${A({ act: 'clear' })}">清掉完成的</button></div><table><tbody id="bgJ"></tbody></table></div>`;
+  $('#bgG').textContent = '⚖ ' + s.gov.line;
+  $('#bgK').innerHTML = s.kinds.map(k => `<tr><td>${k.icon} ${esc(k.name)}</td><td>${k.paused ? '<span class="tag warn">暫停</span>' : k.held ? '<span class="tag warn">讓路</span>' : k.run ? '<span class="tag ok">跑</span>' : '<span class="tag">閒</span>'}</td><td>${k.run}／${k.queue}（同時 ${k.cap}）</td><td class="mut small">${esc(k.mark)}</td>
+    <td>${k.paused ? `<button class="btn sm pri" data-act="${A({ act: 'resume', k: k.k })}">▶</button>` : `<button class="btn sm" data-act="${A({ act: 'pause', k: k.k })}">⏸</button>`}<button class="btn sm" data-act="${A({ act: 'stop', k: k.k })}">⏹</button><button class="btn sm" data-act="${A({ act: 'move', k: k.k, d: -1 })}">↑</button><button class="btn sm" data-act="${A({ act: 'move', k: k.k, d: 1 })}">↓</button></td></tr>`).join('');
+  $('#bgJ').innerHTML = s.jobs.map(j => `<tr><td>${j.icon || ''} ${esc(j.title)}</td><td>${esc(j.st)}</td><td><div class="p"><i style="width:${j.pct}%"></i></div></td><td class="mut small">${esc(j.msg)}　${fmtTime(j.t)}</td>
+    <td>${/run|queue/.test(j.status) ? `<button class="btn sm" data-act="${A({ act: 'cancel', id: j.id })}">✕</button>` : /fail|stop/.test(j.status) ? `<button class="btn sm" data-act="${A({ act: 'retry', id: j.id })}">↻</button>` : ''}</td></tr>`).join('');
+};
+const TH = ['正常', '微熱', '中等', '嚴重', '危急', '緊急', '關機'];
+R.perf = async again => {
+  const d = await api('perf'), p = d.cur || {};
+  if (!again) $('#main').innerHTML = `<div id="pc" class="grid"></div><div class="card"><b>最近 10 分鐘</b><canvas id="cv"></canvas><div class="small mut"><span style="color:#e51e63">■</span> App CPU %　<span style="color:#4dabf7">■</span> 記憶體 %　<span style="color:#fab005">■</span> 電池 °C</div></div>`;
+  const c = (t, v, s) => `<div class="card stat"><small class="mut">${t}</small><b>${v}</b><small class="mut">${s || ''}</small></div>`;
+  $('#pc').innerHTML = c('App CPU', p.cpu >= 0 ? Math.round(p.cpu) + '%' : '—') + c('記憶體可用', fmtSize(p.ramFree), '共 ' + fmtSize(p.ramTotal)) + c('App 用了', fmtSize(p.appMem)) +
+    c('電池', (p.battery >= 0 ? p.battery + '%' : '—'), (p.batTemp || 0).toFixed(1) + '°C' + (p.charging ? '　⚡' : '')) + c('溫度狀態', TH[p.thermal] || '—') + c('空間剩', fmtSize(p.diskFree), '共 ' + fmtSize(p.diskTotal));
+  const cv = $('#cv'), w = cv.clientWidth, h = 180; cv.width = w * 2; cv.height = h * 2; const g = cv.getContext('2d'); g.scale(2, 2);
+  const H = d.hist || []; if (H.length < 2) return;
+  const line = (k, col, max) => { g.strokeStyle = col; g.lineWidth = 2; g.beginPath(); H.forEach((q, i) => { const x = i / (H.length - 1) * w, y = h - 8 - Math.min(max, +q[k] || 0) / max * (h - 16); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); };
+  line('cpu', '#e51e63', 100); line('ram', '#4dabf7', 100); line('temp', '#fab005', 60);
+};
+R.set = async again => {
+  if (again) return;
+  const d = await api('cfg');
+  const inp = r => r.type === 'bool' ? `<input type="checkbox" data-k="${r.k}" ${r.v ? 'checked' : ''}>` : r.type === 'select' ? `<select data-k="${r.k}">${r.opts.map(([o, n]) => `<option value="${esc(o)}" ${String(o) === String(r.v) ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>` : `<input data-k="${r.k}" value="${esc(r.v)}" style="width:110px"> <small class="mut">${esc(r.unit || '')}</small>`;
+  const secs = [...new Set(d.rows.map(r => r.sec))];
+  $('#main').innerHTML = secs.map(s => `<div class="card"><b>${esc(s)}</b><table>${d.rows.filter(r => r.sec === s).map(r => `<tr><td>${esc(r.label)}${r.help ? `<br><small class="mut">${esc(r.help)}</small>` : ''}</td><td style="text-align:right">${inp(r)}</td></tr>`).join('')}</table></div>`).join('') +
+    `<div class="card"><b>🧪 實驗</b><table>${d.lab.map(l => `<tr><td>${esc(l.n)}<br><small class="mut">${esc(l.d)}</small></td><td style="text-align:right"><input type="checkbox" data-lab="${l.k}" ${l.on ? 'checked' : ''}></td></tr>`).join('')}</table></div>`;
+  $('#main').onchange = async e => {
+    const i = e.target; let r;
+    if (i.dataset.k) r = await api('cfg_set', { k: i.dataset.k, v: i.type === 'checkbox' ? i.checked : i.value });
+    else if (i.dataset.lab) r = await api('cfg_set', { lab: i.dataset.lab, v: i.checked });
+    if (r) toast(r.ok ? '存好了' : (r.msg || '失敗'));
+  };
+};
+R.log = async again => {
+  if (again) return;
+  const f = localStorage.getItem('logf') || 'app_log.txt', d = await api('log?f=' + encodeURIComponent(f));
+  $('#main').innerHTML = `<div class="card"><div class="row"><select id="lf">${d.files.map(x => `<option ${x.name === d.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select><input id="lq" placeholder="篩選" class="grow"><button class="btn sm" id="lr">↻</button></div><pre id="lt"></pre></div>`;
+  const show = () => { const q = $('#lq').value.toLowerCase(); $('#lt').textContent = d.text.split('\n').filter(l => !q || l.toLowerCase().includes(q)).reverse().join('\n'); };
+  $('#lf').onchange = e => { localStorage.setItem('logf', e.target.value); render(false); }; $('#lr').onclick = () => render(false); $('#lq').oninput = show; show();
+};
+R.upd = async again => {
+  if (again) return;
+  const d = await api('upd');
+  $('#main').innerHTML = `<div class="card"><b>版本</b><div>畫面 ${esc(d.ui)}　外殼 S${esc(d.shell)}${d.prev ? '　上一版 ' + esc(d.prev) : ''}</div>
+    <div class="row"><button class="btn" id="uc">☁ 檢查雲端更新</button>${d.cloud ? `<button class="btn pri" id="ug">⬇ 更新到雲端最新</button>` : ''}</div><div id="ur" class="small mut">${d.repo ? 'repo：' + esc(d.repo) : '還沒設定 GitHub repo（手機 App ⚙ 設定 → ☁ 雲端更新）'}</div></div>
+    <div class="card"><b>上傳更新包</b><p class="mut small">選 <code>前綴_V0.1.xx.zip</code>，上傳後先檢查內容，再按熱更新。</p><input type="file" id="uf" accept=".zip"><div id="ui" class="small"></div></div>`;
+  $('#uc').onclick = async () => { $('#ur').textContent = '檢查中…'; const r = await api('upd_check'); $('#ur').textContent = (r.ok ? '✅ ' : '❌ ') + (r.msg || ''); setTimeout(() => render(false), 1500); };
+  if ($('#ug')) $('#ug').onclick = async () => { const r = await api('upd_go'); toast(r.msg || ''); };
+  $('#uf').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; $('#ui').textContent = '上傳中…';
+    const r = await fetch('/upload', { method: 'POST', body: f }); if (r.status === 401) return showLogin();
+    const i = await r.json();
+    $('#ui').innerHTML = `<div>這包：${esc(i.version || '?')}（現在 ${esc(i.cur || '')}）${i.files || 0} 個檔</div>` + (i.ok ? `<ul>${(i.notes || []).map(n => `<li>${esc(n)}</li>`).join('')}</ul><button class="btn pri" id="ua">⚡ 熱更新</button>` : `<div style="color:var(--bad)">不能裝：${esc((i.problems || []).join('；'))}</div>`);
+    if ($('#ua')) $('#ua').onclick = async () => { const a = await api('upd_apply', {}); toast(a.msg || ''); };
+  };
+};
+fetch('/api/state').then(r => r.status === 401 ? showLogin() : start()).catch(() => showLogin());
+</script>
+</body>
+</html>

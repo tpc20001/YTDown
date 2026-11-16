@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AndroidKit</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <button class="ib" data-act="menu" aria-label="選單">☰</button>
+  <div class="ttl"><b id="appTitle">AndroidKit</b><small id="pgTitle"></small></div>
+  <button class="ib" data-go="perf" aria-label="效能">📊</button>
+  <button class="ib" data-go="bg" aria-label="後台">🖥</button>
+  <button class="ib" data-act="to_back" aria-label="縮到背景">🌙</button>
+  <button class="ib" data-act="cover" aria-label="封面">🏠</button>
+</header>
+<div id="bars"></div>
+<nav id="drawer"></nav>
+<div id="scrim" data-act="menu"></div>
+<main id="page"></main>
+<footer class="foot">
+  <span id="fState" class="grow ell"></span>
+  <span id="fPerf" class="mut"></span>
+  <button class="fb" id="fTheme" data-act="theme">◐ 深色</button>
+  <button class="fb" id="fZoom" data-act="zoom">100%</button>
+</footer>
+<div id="cover" hidden data-act="cover_off"><div class="cv-in"><div class="cv-logo"></div><div id="cvClock" class="cv-clock"></div><small>點一下回到 App</small></div></div>
+<div id="sheet" hidden></div>
+<div id="toast" hidden></div>
+<script src="kit.js"></script>
+<script src="app.js"></script>
+<script>kit.boot();</script>
+</body>
+</html>

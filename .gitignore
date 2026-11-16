@@ -1,0 +1,12 @@
+# 簽章鑰匙、密碼絕對不要放上 GitHub（repo 是公開的，用 Secrets）
+keystore/
+*.jks
+*.keystore
+KEYSTORE_*.txt
+app/build/
+build/out/
+.gradle/
+local.properties
+out/
+*.apk
+__pycache__/

@@ -1,0 +1,11 @@
+{
+ "id": "AndroidKit",
+ "name": "AndroidKit",
+ "title": "AndroidKit 新程式",
+ "prefix": "AK",
+ "pkg": "com.androidkit.app",
+ "web_port": 8571,
+ "accent": "#e51e63",
+ "github": "",
+ "requires_shell": 1
+}
