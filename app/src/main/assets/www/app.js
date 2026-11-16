@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.51';
+const UI_VER = 'YTD_UI_V0.1.52';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.52', ['紀錄的縮圖改用手機裡的檔案本身（照片直接顯示、影片抓一格畫面），每一則都有縮圖；手機播不了的格式才用網站給的縮圖', '看過的會標「✓ 看過」（多張的標看過幾張），一張一張的小圖看過的會變暗打勾，比較不會點到重複的', '播放時左邊邊緣有兩條細白線：按上面那段＝較新的一則、下面那段＝較舊的一則（照紀錄頁的順序），觸控範圍大約 3 公分寬']],
   ['YTD_UI_V0.1.51', ['橫的影片不再自動轉成橫向全螢幕，照你手上拿的方向（直的）播放', '想要橫向最大畫面看：按右下角的 ⟳，再按一次轉回來']],
   ['YTD_UI_V0.1.50', ['下載頁的「📋 貼上」變成一個超大的按鈕，放在最上面', '按下去會有 1.5 秒的動畫和震動：綠色「＋1 第 N 個」＝加進去了，黃色＝這個已經加過了，紅色＝剪貼簿沒有網址']],
   ['YTD_V0.1.14（外殼）／YTD_UI_V0.1.49', ['🧪 新的「🪟 分屏」：挑一個 App（例如 Telegram），YT Download 會請系統把它開在旁邊，平板上會直接進分屏，手機分身裡也可以試', '長按 YT Download 圖示多了「分屏」捷徑，拖到桌面就是一鍵分屏（跟上次選的 App）']],
@@ -1158,6 +1159,30 @@ const hThumb = h => { const f = !h.gone && (h.files || []).find(x => /^image\//.
 const newGrp = () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const hUrls = h => h.us && h.us.length ? h.us : [h.u];
 const grpTitle = h => `${h.title0 || '一組下載'}${h.grpN > 1 ? ` 等 ${h.grpN} 個網址` : ''}`;
+// ---- 看過的記號：播放器打開過的檔（uri）記在 watched，紀錄裡標「✓ 看過」
+const watched = () => LS('watched') || {};
+function markW(uri) { if (!uri) return; const W = watched(); if (W[uri]) return; W[uri] = Date.now(); const K = Object.keys(W); if (K.length > 6000) K.slice(0, K.length - 6000).forEach(k => delete W[k]); LS('watched', W); }
+const isW = (W, f) => !!(f && W[f.uri]);
+// 紀錄的縮圖：優先用手機裡的檔案本身（照片直接顯示、影片抓一格畫面），網站給的縮圖網址常常會過期或沒有，只當備用
+function histThumb(h) {
+  const f = !h.gone && mediaOf(h.files)[0], back = h.thumb ? esc(h.thumb) : '';
+  if (f && mimeOf(f).startsWith('image/')) return `<img class="thumb" src="${esc(f.uri)}" alt="" loading="lazy"${back ? ` onerror="this.onerror=null;this.src='${back}'"` : ` onerror="this.style.visibility='hidden'"`}>`;
+  if (f && mimeOf(f).startsWith('video/')) return `<video class="thumb vthumb" data-src="${esc(f.uri)}#t=1" data-back="${back}" preload="none" muted playsinline></video>`;
+  if (f && mimeOf(f).startsWith('audio/')) return back ? thumbImg(h.thumb) : '<div class="thumb thumb-ic">🎵</div>';
+  return back ? thumbImg(h.thumb) : `<div class="thumb thumb-ic">${esc(h.ab || '▶')}</div>`;
+}
+// 影片縮圖等捲到附近才載入（一次載太多會卡）；手機播不了的格式退回網站縮圖
+let vtObs = null;
+function wireVThumbs() {
+  if (!vtObs) vtObs = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return; const v = e.target; vtObs.unobserve(v);
+    v.onerror = () => { const b = v.dataset.back; v.replaceWith(Object.assign(document.createElement(b ? 'img' : 'div'), b ? { className: 'thumb', src: b } : { className: 'thumb thumb-ic', textContent: '▶' })); };
+    v.preload = 'metadata'; v.src = v.dataset.src;
+  }), { rootMargin: '400px' });
+  document.querySelectorAll('#hist video.vthumb[data-src]:not([src])').forEach(v => vtObs.observe(v));
+}
+let hOrder = [];
+const hKey = h => h.t + '|' + h.u;
 function saveHist(j) {
   const H = LS('hist') || [], ok = j.state === 'ok';
   if (j.grp) {                                                                  // 同一組的合成一筆：檔案全部放一起
@@ -1194,12 +1219,14 @@ function drawHist() {
   const more = L.length > hShow;
   $('#hCount').textContent = H.length ? `${L.length} / ${H.length} 筆` : '';
   $('#bHClr').hidden = !H.length;
+  hOrder = L.map(hKey); const W = watched();
   $('#hist').innerHTML = L.length ? L.slice(0, hShow).map(h => {
     const f = h.files && h.files[0], total = szOf(h);
+    const Mw = h.ok && !h.gone ? mediaOf(h.files) : [], nw = Mw.filter(x => isW(W, x)).length, seenTag = nw ? `<span class="seen-b">✓ 看過${Mw.length > 1 ? ` ${nw}/${Mw.length}` : ''}</span>` : '';
     const M = h.ok && !h.gone ? mediaOf(h.files) : [], multi = M.length > 1;
-    const strip = multi ? `<div class="strip">${M.slice(0, 40).map((x, n) => `<button class="tile" type="button" data-a="openAt" data-n="${n}" aria-label="第 ${n + 1} 個">${mimeOf(x).startsWith('image/') ? `<img src="${esc(x.uri)}" alt="" loading="lazy">` : mimeOf(x).startsWith('video/') ? `<video src="${esc(x.uri)}#t=0.5" preload="metadata" muted playsinline></video><span class="tile-k">影片</span>` : '<span class="tile-k">聲音</span>'}</button>`).join('')}${M.length > 40 ? `<span class="mut small">還有 ${M.length - 40} 個</span>` : ''}</div>` : '';
-    return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}${multi ? ' multi' : ''}" data-i="${h.i}">${multi ? '' : `<button class="tbtn" type="button" data-a="open" aria-label="播放">${thumbImg(hThumb(h))}</button>`}<div class="cb">
-      <div class="ct">${esc(h.title || h.u)}</div>
+    const strip = multi ? `<div class="strip">${M.slice(0, 40).map((x, n) => `<button class="tile" type="button" data-a="openAt" data-n="${n}" aria-label="第 ${n + 1} 個"${isW(W, x) ? ' data-w="1"' : ''}>${mimeOf(x).startsWith('image/') ? `<img src="${esc(x.uri)}" alt="" loading="lazy">` : mimeOf(x).startsWith('video/') ? `<video src="${esc(x.uri)}#t=0.5" preload="metadata" muted playsinline></video><span class="tile-k">影片</span>` : '<span class="tile-k">聲音</span>'}</button>`).join('')}${M.length > 40 ? `<span class="mut small">還有 ${M.length - 40} 個</span>` : ''}</div>` : '';
+    return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}${multi ? ' multi' : ''}" data-i="${h.i}">${multi ? '' : `<button class="tbtn" type="button" data-a="open" aria-label="播放">${histThumb(h)}${seenTag}</button>`}<div class="cb">
+      <div class="ct">${multi ? seenTag : ''}${esc(h.title || h.u)}</div>
       <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span>${h.uploader ? `<button class="link who" type="button" data-a="who">${esc((h.site === 'Instagram' ? '@' : '') + h.uploader)}</button>` : ''}<span>${fmtTime(h.t)}</span><span>${esc(qShow(h.q || 'best', h.res))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${h.grp ? `<span>${hUrls(h).length} 個網址</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}${h.grp && h.nBad ? `<span class="bad-t">${h.nBad} 個失敗</span>` : ''}</div>
       ${strip}
       ${h.gone ? '<div class="st mut">檔案已刪除</div>' : h.ok && !(h.grp && h.nBad) ? '' : `<div class="st">${esc(h.msg || '失敗')}</div>`}
@@ -1208,13 +1235,15 @@ function drawHist() {
     </div></div>`;
   }).join('') + (more ? `<button class="btn big" type="button" id="hMore">再顯示 100 筆（還有 ${L.length - hShow} 筆）</button>` : '') : `<p class="empty">${H.length ? '沒有符合的紀錄' : '還沒有下載紀錄'}</p>`;
   const hm = $('#hMore'); if (hm) hm.onclick = () => { hShow += 100; drawHist(); };
+  wireVThumbs();
 }
 $('#hist').onclick = e => {
   const b = e.target.closest('[data-a]'); if (!b) return;
   const i = +b.closest('.card').dataset.i, H = LS('hist') || [], h = H[i]; if (!h) return;
   const a = b.dataset.a, f = (h.files || [])[0];
-  if (a === 'open') { if (h.ok && !h.gone && f) playF(h.files, h.title); }
-  else if (a === 'openAt') playF(h.files, h.title, +b.dataset.n);
+  const ctx = { order: hOrder.slice(), at: hOrder.indexOf(hKey(h)) };
+  if (a === 'open') { if (h.ok && !h.gone && f) playF(h.files, h.title, 0, ctx); }
+  else if (a === 'openAt') playF(h.files, h.title, +b.dataset.n, ctx);
   else if (a === 'who') { if (h.site === 'Instagram' && has('http')) openIg(h.uploader, h.uid); else { $('#hSearch').value = h.uploader; hShow = 100; drawHist(); window.scrollTo(0, 0); } }
   else if (a === 'share') shareF(f);
   else if (a === 'again') { page('dl'); addUrls(hUrls(h).join('\n')); }
@@ -1530,9 +1559,10 @@ const P = { list: [], i: 0, title: '', rate: Math.min(4, Math.max(0.25, +LS('pra
 const pEl = $('#player'), pv = $('#pv'), pim = $('#pi');
 function mimeGuess(n) { const e = (String(n || '').split('.').pop() || '').toLowerCase(); return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime', m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', ogg: 'audio/ogg', flac: 'audio/flac', wav: 'audio/wav', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic' })[e] || ''; }
 const mimeOf = f => (f && (f.mime && f.mime !== 'application/octet-stream' ? f.mime : mimeGuess(f.name))) || '';
-function playF(files, title, start) {
+function playF(files, title, start, hctx) {
   const L = mediaOf(files);
   if (!L.length) { openF((files || [])[0]); return; }
+  P.hctx = hctx || null;
   P.list = L; P.i = Math.max(0, Math.min(start || 0, L.length - 1)); P.title = title || '';
   pEl.hidden = false; document.body.classList.add('locked'); call('keepOn', true); call('immersive', true);
   pLoad();
@@ -1541,6 +1571,7 @@ function pPos(save) { const f = P.list[P.i]; if (!f || pv.hidden) return 0; cons
   if (isFinite(pv.duration) && pv.duration > 60) { if (pv.currentTime > 5 && pv.currentTime < pv.duration - 10) M[f.uri] = Math.floor(pv.currentTime); else delete M[f.uri]; const K = Object.keys(M); if (K.length > 300) delete M[K[0]]; LS('pos', M); } return 0; }
 function pLoad() {
   const f = P.list[P.i], img = mimeOf(f).startsWith('image/');
+  markW(f.uri); $('#pNav').hidden = !P.hctx;
   $('#pErr').hidden = true; $('#pSeek').hidden = true;
   $('#pTitle').textContent = (P.list.length > 1 ? `${P.i + 1}/${P.list.length}　` : '') + (P.title || f.name || '');
   $('#pPrev').hidden = $('#pNext').hidden = P.list.length < 2;
@@ -1551,7 +1582,7 @@ function pLoad() {
 }
 function pFail(msg) { $('#pErrMsg').textContent = msg; $('#pErr').hidden = false; pUi(true); }
 function pStep(d) { if (P.list.length < 2) return; pPos(true); P.i = (P.i + d + P.list.length) % P.list.length; pLoad(); }
-function pClose() { $('#pRateBox').hidden = true; jogEl.hidden = true; pPos(true); pv.pause(); pv.removeAttribute('src'); pv.load(); pim.removeAttribute('src'); pEl.hidden = true; if ($('#igPane').hidden) document.body.classList.remove('locked'); call('orient', 'auto'); call('keepOn', false); call('immersive', false); if (!$('#p_hist').classList.contains('on')) return; }
+function pClose() { $('#pRateBox').hidden = true; jogEl.hidden = true; pPos(true); pv.pause(); pv.removeAttribute('src'); pv.load(); pim.removeAttribute('src'); pEl.hidden = true; if ($('#igPane').hidden) document.body.classList.remove('locked'); call('orient', 'auto'); call('keepOn', false); call('immersive', false); if (!$('#p_hist').classList.contains('on')) return; drawHist(); }
 function pUi(sticky) { pEl.classList.add('ui'); clearTimeout(P.uiT); if (!sticky && !pv.hidden && !pv.paused) P.uiT = setTimeout(() => pEl.classList.remove('ui'), 3000); }
 function pToggle() { if (pv.paused) { const p = pv.play(); if (p && p.catch) p.catch(() => {}); } else pv.pause(); }
 function pJump(d) { if (!isFinite(pv.duration)) return; pv.currentTime = Math.min(pv.duration, Math.max(0, pv.currentTime + d)); pHint(pv.currentTime, d); setTimeout(() => { if (!gs) $('#pSeek').hidden = true; }, 600); }
@@ -1606,7 +1637,7 @@ const jog = { on: LS('pjog') == null ? Math.min(screen.width, screen.height) >= 
 const jogEl = $('#pJog');
 function jogShow() {
   const show = jog.on && !pEl.hidden && !pv.hidden;
-  jogEl.hidden = !show; $('#pJogBtn').classList.toggle('on', jog.on);
+  jogEl.hidden = !show; pEl.classList.toggle('hasjog', show); $('#pJogBtn').classList.toggle('on', jog.on);
   if (show) pEl.style.setProperty('--jogR', Math.round(Math.max(170, Math.min(340, Math.min(pEl.clientWidth, pEl.clientHeight) * 0.42))) + 'px');
 }
 $('#pJogBtn').onclick = () => { jog.on = !jog.on; LS('pjog', jog.on); jogShow(); toast(jog.on ? '轉盤開了：左下角（看不見）順時針轉快轉、逆時針倒轉' : '轉盤關了'); pUi(); };
@@ -1641,6 +1672,23 @@ const jogEnd = e => {
 };
 jogEl.addEventListener('pointerup', jogEnd);
 jogEl.addEventListener('pointercancel', jogEnd);
+// ---- 左邊邊緣：上半＝較新的一則、下半＝較舊的一則（照紀錄頁的順序）。只畫兩條細白線，觸控區大約 3 公分寬
+function pNavHint(t) { const el = $('#pSeek'); el.hidden = false; el.innerHTML = `<b style="font-size:16px">${esc(t)}</b>`; clearTimeout(P.navT); P.navT = setTimeout(() => { if (!gs) el.hidden = true; }, 1400); }
+function histStep(d) {
+  const c = P.hctx; if (!c) return;
+  const H = LS('hist') || [], get = k => H.find(x => hKey(x) === c.order[k]);
+  let k = c.at, h = null;
+  while (true) {
+    k += d;
+    if (k < 0 || k >= c.order.length) { pNavHint(d < 0 ? '已經是最新的一則' : '已經是最舊的一則'); call('vibrate', 60); return; }
+    h = get(k); if (h && h.ok && !h.gone && mediaOf(h.files).length) break;
+  }
+  pPos(true); c.at = k; P.list = mediaOf(h.files); P.i = 0; P.title = h.title || '';
+  pLoad(); pNavHint((d < 0 ? '▲ 較新：' : '▼ 較舊：') + (h.title || '')); call('vibrate', 20);
+}
+['pointerdown', 'pointerup'].forEach(ev => $('#pNav').addEventListener(ev, e => e.stopPropagation()));
+$('#pNavUp').onclick = e => { e.stopPropagation(); histStep(-1); };
+$('#pNavDn').onclick = e => { e.stopPropagation(); histStep(1); };
 pv.loop = !!LS('ploop'); $('#pLoop').classList.toggle('on', pv.loop);
 if (LS('pfill')) { pEl.classList.add('fill'); $('#pFit').classList.add('on'); }
 $('#pRot').onclick = () => { P.land = !P.land; call('orient', P.land ? 'land' : 'port'); pUi(); };
