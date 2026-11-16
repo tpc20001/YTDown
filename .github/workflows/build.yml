@@ -28,11 +28,19 @@ jobs:
       - name: 檢查
         run: python3 tools/check.py --ci
       - name: 放上簽章鑰匙
-        env: { KEYSTORE_B64: '${{ secrets.KEYSTORE_B64 }}' }
+        env: { KEYSTORE_B64: '' }
         run: |
           mkdir -p keystore
           if [ -n "$KEYSTORE_B64" ]; then echo "$KEYSTORE_B64" | base64 -d > keystore/app.jks
           else echo "::warning::沒有 KEYSTORE_B64：這次用臨時鑰匙，手機上要先移除舊版才能裝（看設定精靈第 4 步）"; fi
+      - name: 檢查簽章鑰匙
+        if: hashFiles('keystore/app.jks') != ''
+        env: { KEYSTORE_PASS: '${{ secrets.KEYSTORE_PASS }}' }
+        run: |
+          if ! keytool -list -keystore keystore/app.jks -storepass "${KEYSTORE_PASS:-androidkit}" -alias app >/dev/null 2>&1; then
+            echo "::error::簽章鑰匙打不開：KEYSTORE_PASS 不對，或 KEYSTORE_B64 不是這個程式的 BUILD_AND_INSTALL.bat 做的（別名要是 app）。重新點 MAKE_GITHUB_KEY.bat，把兩段都重貼到 Secrets。"
+            exit 1
+          fi
       - name: 打包 APK
         env: { KEYSTORE_PASS: '${{ secrets.KEYSTORE_PASS }}' }
         run: gradle assembleRelease --no-daemon --console=plain
