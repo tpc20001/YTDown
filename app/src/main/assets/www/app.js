@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.60';
+const UI_VER = 'YTD_UI_V0.1.61';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.61', ['「📋 貼上」按鈕縮成原本的四分之一高（點一下畫面就會自動讀，按鈕只是備用）', '讀到網址時，畫面中間會跳出「＋1」的動畫：光圈擴散、光點噴開，最後縮小飛進網址框，加一下震動（暗色，不刺眼）']],
   ['YTD_UI_V0.1.60', ['播放器畫面正中間不再出現任何按鈕：播放／暫停鈕搬到下面控制列的最左邊（點兩下畫面中間一樣可以播放／暫停）；同一則裡的上一張／下一張用左右滑']],
   ['YTD_UI_V0.1.59', ['紀錄改成「新的在最下面、舊的在上面」（像 IG、抖音），打開紀錄頁會直接到最下面（最新的）；要看更舊的，捲到最上面按「再顯示 100 筆較舊的」', '播放時往上滑＝下一則（比較新的）、往下滑＝上一則（比較舊的），跟紀錄頁的順序一樣', '排序選單可以換回「新的在最上面」']],
   ['YTD_UI_V0.1.58', ['播放器改成像抖音：在畫面任何地方往上滑＝下一則（較舊）、往下滑＝上一則（較新），照紀錄頁的順序；左右滑一樣是拖進度（照片是換張）。手機、平板、橫的影片都一樣', '關掉播放器改用左上角 ✕ 或返回鍵（不是從紀錄打開的單一個檔，往下滑一樣是關掉）', '🎛 轉盤和左下角上一則／下一則先收起來，工具列的 🎛 可以叫回來（轉盤也調大了一點）']],
@@ -315,12 +316,23 @@ urlBox.addEventListener('input', onInput);
 urlBox.addEventListener('keydown', e => { if (e.key === 'Enter' && !$('#searchBox').hidden) { e.preventDefault(); doSearch(); } });
 // 大「貼上」：按下去 1.5 秒內用顏色、動畫、震動告訴你結果（綠＝加進去第幾個、黃＝已經有了、紅＝沒有網址）
 let bpT = 0;
+// 讀到網址的動畫：畫面中間跳出「＋1」＋光圈＋光點，最後縮小飛向網址框
+let gfT = 0;
+function grabFx(n, label) {
+  let el = $('#grabFx'); if (el) el.remove(); clearTimeout(gfT);
+  el = document.createElement('div'); el.id = 'grabFx';
+  const box = urlBox.getBoundingClientRect(), dy = Math.round(box.top + box.height / 2 - innerHeight / 2);
+  const dots = Array.from({ length: 12 }, (_, i) => `<i class="gf-dot" style="--a:${i * 30 + 15}deg;animation-delay:${0.05 + (i % 3) * 0.04}s"></i>`).join('');
+  el.innerHTML = `<div class="gf-core" style="--gfY:${dy}px">${dots}<span class="gf-ring"></span><span class="gf-ring r2"></span><span class="gf-num">＋${n}</span><span class="gf-tag">${esc(label)}</span></div>`;
+  document.body.appendChild(el); call('vibrate', 35);
+  gfT = setTimeout(() => el.remove(), 1400);
+}
 function bpShow(kind, main, sub, buzz) {
   const b = $('#bPaste'); clearTimeout(bpT);
   b.classList.remove('ok', 'dup', 'bad'); void b.offsetWidth; b.classList.add(kind);
   b.innerHTML = `<span class="bp-ring"></span><span class="bp-main">${esc(main)}</span><span class="bp-sub">${esc(sub)}</span>`;
   call('vibrate', buzz);
-  bpT = setTimeout(() => { b.classList.remove('ok', 'dup', 'bad'); const n = currentUrls().length; b.innerHTML = `<span class="bp-main">📋 貼上</span><span class="bp-sub">${n ? `已經有 ${n} 個，複製下一個再按` : '複製網址後按這裡'}</span>`; }, 1600);
+  bpT = setTimeout(() => { b.classList.remove('ok', 'dup', 'bad'); const n = currentUrls().length; b.innerHTML = `<span class="bp-main">📋 貼上</span><span class="bp-sub">${n ? `已經有 ${n} 個` : '（點一下畫面也會自動讀）'}</span>`; }, 1600);
 }
 $('#bPaste').onclick = () => {
   const t = call('paste') || '';
@@ -330,7 +342,7 @@ $('#bPaste').onclick = () => {
   const before = currentUrls().length;
   addUrls(t, true);
   const n = currentUrls().length, added = n - before;
-  if (added > 0) { LS('lastClip', L[0]); bpShow('ok', `＋${added}　第 ${n} 個`, '加進去了！可以去複製下一個', 40); }
+  if (added > 0) { LS('lastClip', L[0]); bpShow('ok', `＋${added}　第 ${n} 個`, '加進去了', 0); grabFx(added, `第 ${n} 個`); }
   else bpShow('dup', '這個已經加過了', `現在共 ${n} 個`, 25);
 };
 $('#bClear').onclick = () => { urlBox.value = ''; info = null; probeUrl = ''; onInput(); urlBox.focus(); };
@@ -535,7 +547,7 @@ function checkClip() {
   if (u === LS('lastClip') || currentUrls().includes(u)) return;          // 同一份剪貼簿內容：不重複處理、也不一直問
   const seen = seenUrl(u);
   if (seen === 'busy') return;
-  if (collect && seen !== 'had') { LS('lastClip', u); page('dl'); addUrls(u, true); collectUi(); call('vibrate', 25); toast(`收集到第 ${currentUrls().length} 個`, 1500); return; }
+  if (collect && seen !== 'had') { LS('lastClip', u); page('dl'); addUrls(u, true); collectUi(); const n = currentUrls().length; grabFx(1, `收集到第 ${n} 個`); bpShow('ok', `＋1　第 ${n} 個`, '自動讀到了', 0); return; }
   if (seen === 'had') { askClip(u, true); return; }                         // 下載過：要你按了才會再抓
   if (S.autoDl && siteOf(u) !== OTHER && !igUserOf(u)) { autoGo(u); toast('已自動開始下載（' + siteOf(u).k + '）', 3000); return; }
   if (S.clip) askClip(u, false);
@@ -550,7 +562,7 @@ window.onFocusWin = () => { clipSoon(); takeCollected(); };
 function takeCollected() {
   if (!has('takeCollected')) return; const L = jcall('takeCollected') || []; if (!L.length) return;
   page('dl'); const before = currentUrls().length; addUrls(L.join('\n'), true);
-  const n = currentUrls().length; if (n > before) bpShow('ok', `＋${n - before}　共 ${n} 個`, '從分享收集進來的', 40);
+  const n = currentUrls().length; if (n > before) { bpShow('ok', `＋${n - before}　共 ${n} 個`, '從分享收集進來的', 0); grabFx(n - before, `共 ${n} 個`); }
 }
 window.onCollected = () => setTimeout(takeCollected, 50);
 setTimeout(takeCollected, 800);                                       // 外殼 V0.1.13：小窗被點到（拿到焦點）時
