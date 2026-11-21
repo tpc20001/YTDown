@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.61';
+const UI_VER = 'YTD_UI_V0.1.62';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.16（外殼）／YTD_UI_V0.1.62', ['在 IG、YouTube、TikTok 等按「分享」→ 選 YT Download，現在直接加入下載，畫面不會跳過來，只跳一個「已加入下載」的小提示', 'YT Download 完全沒開的時候，會在背景叫起來收下網址，收完自己退回去', '已經下載過的會提示，不會重複下載']],
   ['YTD_UI_V0.1.61', ['「📋 貼上」按鈕縮成原本的四分之一高（點一下畫面就會自動讀，按鈕只是備用）', '讀到網址時，畫面中間會跳出「＋1」的動畫：光圈擴散、光點噴開，最後縮小飛進網址框，加一下震動（暗色，不刺眼）']],
   ['YTD_UI_V0.1.60', ['播放器畫面正中間不再出現任何按鈕：播放／暫停鈕搬到下面控制列的最左邊（點兩下畫面中間一樣可以播放／暫停）；同一則裡的上一張／下一張用左右滑']],
   ['YTD_UI_V0.1.59', ['紀錄改成「新的在最下面、舊的在上面」（像 IG、抖音），打開紀錄頁會直接到最下面（最新的）；要看更舊的，捲到最上面按「再顯示 100 筆較舊的」', '播放時往上滑＝下一則（比較新的）、往下滑＝上一則（比較舊的），跟紀錄頁的順序一樣', '排序選單可以換回「新的在最上面」']],
@@ -569,6 +570,16 @@ setTimeout(takeCollected, 800);                                       // 外殼 
 document.addEventListener('visibilitychange', () => { if (!document.hidden) clipSoon(); });
 $('#clipAdd').onclick = () => { if (clipDup) { autoGo(clipU); toast('再下載一次'); return; } LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
 $('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; };
+// 分享選單「YT Download」（外殼 V0.1.16）：畫面不跳過來，直接開始下載（不管有沒有開「自動下載」）
+window.onShareBg = t => {
+  const L = urlsIn(t);
+  const fresh = L.filter(u => !seenUrl(u)), dup = L.filter(u => seenUrl(u));
+  const grp = fresh.length > 1 ? newGrp() : '';
+  fresh.forEach(u => { LS('lastClip', u); enqueue(u, S.quality, null, { sponsor: S.sponsor, grp, grpN: fresh.length }); });
+  if (!fresh.length && dup.length) call('toastTop', '這個之前下載過、或正在下載');
+  else if (fresh.length) { page('dl'); grabFx(fresh.length, fresh.length > 1 ? `已加入 ${fresh.length} 個` : '已加入下載'); }
+  setTimeout(() => call('bgDone'), 600);
+};
 window.onShare = t => {
   page('dl'); const L = urlsIn(t);
   if (!L.length) { toast('分享的內容裡沒有網址'); return; }
