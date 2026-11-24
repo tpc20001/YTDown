@@ -464,9 +464,6 @@ class MainActivity : AppCompatActivity() {
             return "OK"
         }
         @JavascriptInterface fun multiWin(): Boolean = Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode
-        // ---- 分享收集（CollectActivity 收到的網址）
-        @JavascriptInterface fun takeCollected(): String = Collect.take(this@MainActivity)
-        @JavascriptInterface fun collectReset() = Collect.reset(this@MainActivity)
         /** 背景分享收完了：退到後面，回到原本的 App */
         @JavascriptInterface fun bgDone() { runOnUiThread { if (intent?.getBooleanExtra(EXTRA_BG, false) == true) { intent.removeExtra(EXTRA_BG); moveTaskToBack(true) } } }
         /** 不在前面時也看得到的提示（例如背景分享進來的網址已經下載過了） */

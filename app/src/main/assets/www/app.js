@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.62';
+const UI_VER = 'YTD_UI_V0.1.63';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.17（外殼）／YTD_UI_V0.1.63', ['分享到 YT Download、複製網址，都是讀到就直接下載，不會再跳出「剪貼簿有網址／下載過了，要再下載嗎？」那條要你按的提示', '修正：同一則貼文換了追蹤碼（?igsh= 之類）會被當成新的、幾小時前的舊剪貼簿又被讀一次而卡住「下載過了」', '剪貼簿只收支援的網站，複製文章、別的連結不會去解析；貼上鈕不會再把文章塞進網址框', '解析超過 30 秒會停下來說明；下載 6 分鐘完全沒動會自動停止，可以按重試', '拿掉「連續收集」和分享選單的「收集到 YT Download」（現在都直接下載）']],
   ['YTD_V0.1.16（外殼）／YTD_UI_V0.1.62', ['在 IG、YouTube、TikTok 等按「分享」→ 選 YT Download，現在直接加入下載，畫面不會跳過來，只跳一個「已加入下載」的小提示', 'YT Download 完全沒開的時候，會在背景叫起來收下網址，收完自己退回去', '已經下載過的會提示，不會重複下載']],
   ['YTD_UI_V0.1.61', ['「📋 貼上」按鈕縮成原本的四分之一高（點一下畫面就會自動讀，按鈕只是備用）', '讀到網址時，畫面中間會跳出「＋1」的動畫：光圈擴散、光點噴開，最後縮小飛進網址框，加一下震動（暗色，不刺眼）']],
   ['YTD_UI_V0.1.60', ['播放器畫面正中間不再出現任何按鈕：播放／暫停鈕搬到下面控制列的最左邊（點兩下畫面中間一樣可以播放／暫停）；同一則裡的上一張／下一張用左右滑']],
@@ -339,19 +340,15 @@ $('#bPaste').onclick = () => {
   const t = call('paste') || '';
   if (!t.trim()) { bpShow('bad', '剪貼簿是空的', '先去複製網址', 60); return; }
   const L = urlsIn(t);
-  if (!L.length) { urlBox.value = t.trim(); onInput(); bpShow('bad', '這不是網址', '已經放進框框（會當成搜尋）', 60); return; }
+  if (!L.length) { bpShow('bad', '剪貼簿裡沒有網址', '（要搜尋就直接在框框打字）', 60); return; }
   const before = currentUrls().length;
   addUrls(t, true);
   const n = currentUrls().length, added = n - before;
-  if (added > 0) { LS('lastClip', L[0]); bpShow('ok', `＋${added}　第 ${n} 個`, '加進去了', 0); grabFx(added, `第 ${n} 個`); }
+  if (added > 0) { L.forEach(markDone); bpShow('ok', `＋${added}　第 ${n} 個`, '加進去了', 0); grabFx(added, `第 ${n} 個`); }
   else bpShow('dup', '這個已經加過了', `現在共 ${n} 個`, 25);
 };
 $('#bClear').onclick = () => { urlBox.value = ''; info = null; probeUrl = ''; onInput(); urlBox.focus(); };
-$('#bCollect').onclick = () => {
-  const on = !LS('collect'); LS('collect', on ? 1 : 0); collectUi();
-  if (on) { LS('lastClip', call('paste') ? urlsIn(call('paste'))[0] || '' : ''); toast('連續收集開了：去複製網址，回來（小窗點一下）就會自動加進來，收完按下載', 4500); }
-  else toast('連續收集關了');
-};
+
 
 function addUrls(text, quiet) {
   const L = urlsIn(text); if (!L.length) { if (!quiet) toast('裡面沒有網址'); return false; }
@@ -418,6 +415,7 @@ function probe(u, k) {
   probeUrl = u; probeK = k; probeId = 'p' + Date.now();
   if (siteOf(u).k === 'Telegram' && has('tgJob') && tgReady()) { info = { ok: true, url: u, title: 'Telegram 貼文', heights: [], tg: true }; drawPreview(); drawQual(); return; }   // 走帳號下載，不用預覽
   info = { loading: true, url: u }; drawPreview(); drawQual();
+  { const me = probeId; setTimeout(() => { if (probeId === me && info && info.loading) { info = { err: '解析超過 30 秒，先停下來了（網址可能不是影片）。還是可以直接按下載試試看', url: u }; drawPreview(); drawQual(); } }, 30000); }
   if (siteOf(u).k === 'Instagram' && has('http')) {
     const me = probeId, un = igUserOf(u);
     if (un) { info = { ok: true, url: u, profile: un, title: '@' + un + ' 的 IG', heights: [] }; drawPreview(); drawQual(); return; }
@@ -528,6 +526,12 @@ function seenUrl(u) {
   if (Q.some(j => j.state === 'ok' && urlKey(j.url) === k) || (LS('hist') || []).some(h => h.ok && hUrls(h).some(u => urlKey(u) === k))) return 'had';
   return '';
 }
+// 處理過的網址（剪貼簿、分享、貼上、下載都算）：用 urlKey 記「哪一則」，同一則換了追蹤碼也認得；剪貼簿的舊內容不會再被處理
+function doneKeys() { return LS('doneKeys') || []; }
+function markDone(u) { const k = urlKey(u), L = doneKeys().filter(x => x !== k); L.push(k); LS('doneKeys', L.slice(-300)); LS('lastClip', u); }
+const isDone = u => doneKeys().includes(urlKey(u)) || u === LS('lastClip');
+// 剪貼簿只收支援的網站（避免複製到文章、別的連結就去解析）
+const goodUrl = u => siteOf(u) !== OTHER;
 let clipDup = false;
 function askClip(u, dup) {
   clipU = u; clipDup = dup;
@@ -535,23 +539,19 @@ function askClip(u, dup) {
   $('#clipAdd').textContent = dup ? '再下載' : '加入'; $('#clipNo').textContent = dup ? '不用' : '忽略';
   $('#clipUrl').textContent = u; $('#clipBar').hidden = false;
 }
-function autoGo(u) { LS('lastClip', u); $('#clipBar').hidden = true; page('dl'); enqueue(u, S.quality, null, { sponsor: S.sponsor }); }
+function autoGo(u) { markDone(u); $('#clipBar').hidden = true; page('dl'); enqueue(u, S.quality, null, { sponsor: S.sponsor }); }
 // 📋 連續收集：開著時，每次回到 App（小窗點一下也算）剪貼簿裡的新網址會自動加到下面，收完按一次下載＝一組
 let collectN = 0;
-function collectUi() { const b = $('#bCollect'); if (!b) return; const on = !!LS('collect'); b.classList.toggle('primary', on); b.classList.toggle('ghost', !on); b.textContent = on ? `📋 連續收集中${currentUrls().length ? '（' + currentUrls().length + '）' : ''}` : '📋 連續收集'; }
+function collectUi() { return; const b = $('#bCollect'); if (!b) return; const on = !!LS('collect'); b.classList.toggle('primary', on); b.classList.toggle('ghost', !on); b.textContent = on ? `📋 連續收集中${currentUrls().length ? '（' + currentUrls().length + '）' : ''}` : '📋 連續收集'; }
 function checkClip() {
-  if (!has('paste')) return;
-  const collect = !!LS('collect');
-  if (!collect && !S.clip && !S.autoDl) return;
-  const L = urlsIn(N.paste()); if (!L.length) return;
-  const u = L[0];
-  if (u === LS('lastClip') || currentUrls().includes(u)) return;          // 同一份剪貼簿內容：不重複處理、也不一直問
+  if (!has('paste') || (!S.clip && !S.autoDl)) return;
+  const u = urlsIn(N.paste()).find(goodUrl); if (!u) return;               // 不是支援的網站（文章、其他連結）：不理它
+  if (isDone(u) || currentUrls().some(x => urlKey(x) === urlKey(u))) return; // 處理過的（含幾小時前的舊剪貼簿）：不再處理
+  markDone(u);
   const seen = seenUrl(u);
   if (seen === 'busy') return;
-  if (collect && seen !== 'had') { LS('lastClip', u); page('dl'); addUrls(u, true); collectUi(); const n = currentUrls().length; grabFx(1, `收集到第 ${n} 個`); bpShow('ok', `＋1　第 ${n} 個`, '自動讀到了', 0); return; }
-  if (seen === 'had') { askClip(u, true); return; }                         // 下載過：要你按了才會再抓
-  if (S.autoDl && siteOf(u) !== OTHER && !igUserOf(u)) { autoGo(u); toast('已自動開始下載（' + siteOf(u).k + '）', 3000); return; }
-  if (S.clip) askClip(u, false);
+  if (seen === 'had') { toast('剪貼簿的網址之前下載過了，略過', 2200); return; }
+  autoGo(u); grabFx(1, '開始下載（' + siteOf(u).k + '）');
 }
 // 回到 App 時，系統可能還沒把剪貼簿交給我們，所以分幾次讀
 let clipTimers = [];
@@ -561,6 +561,7 @@ window.addEventListener('focus', clipSoon);
 window.onFocusWin = () => { clipSoon(); takeCollected(); };
 // 分享選單「收集到 YT Download」收進來的網址（外殼 V0.1.15）：畫面開著馬上加進來，沒開就等打開時
 function takeCollected() {
+  return;                                                                   // 0.1.63 拿掉「收集」，分享就直接下載
   if (!has('takeCollected')) return; const L = jcall('takeCollected') || []; if (!L.length) return;
   page('dl'); const before = currentUrls().length; addUrls(L.join('\n'), true);
   const n = currentUrls().length; if (n > before) { bpShow('ok', `＋${n - before}　共 ${n} 個`, '從分享收集進來的', 0); grabFx(n - before, `共 ${n} 個`); }
@@ -571,24 +572,22 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) clip
 $('#clipAdd').onclick = () => { if (clipDup) { autoGo(clipU); toast('再下載一次'); return; } LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
 $('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; };
 // 分享選單「YT Download」（外殼 V0.1.16）：畫面不跳過來，直接開始下載（不管有沒有開「自動下載」）
-window.onShareBg = t => {
-  const L = urlsIn(t);
-  const fresh = L.filter(u => !seenUrl(u)), dup = L.filter(u => seenUrl(u));
+window.onShareBg = (t, inApp) => {
+  const all = [...new Set(urlsIn(t))], L = all.filter(goodUrl).length ? all.filter(goodUrl) : all.slice(0, 1);   // 有支援的網站就只抓那些；都不是就試第一個
+  const say = m => inApp ? toast(m, 2500) : call('toastTop', m);
+  if (!L.length) { say('分享的內容裡沒有網址'); setTimeout(() => call('bgDone'), 300); return; }
+  const fresh = L.filter(u => !seenUrl(u));
+  L.forEach(markDone);
   const grp = fresh.length > 1 ? newGrp() : '';
-  fresh.forEach(u => { LS('lastClip', u); enqueue(u, S.quality, null, { sponsor: S.sponsor, grp, grpN: fresh.length }); });
-  if (!fresh.length && dup.length) call('toastTop', '這個之前下載過、或正在下載');
-  else if (fresh.length) { page('dl'); grabFx(fresh.length, fresh.length > 1 ? `已加入 ${fresh.length} 個` : '已加入下載'); }
+  fresh.forEach(u => enqueue(u, S.quality, null, { sponsor: S.sponsor, grp, grpN: fresh.length }));
+  if (!fresh.length) say('這個之前下載過、或正在下載，略過');
+  else { page('dl'); grabFx(fresh.length, fresh.length > 1 ? `已加入 ${fresh.length} 個` : '已加入下載'); }
   setTimeout(() => call('bgDone'), 600);
 };
 window.onShare = t => {
   page('dl'); const L = urlsIn(t);
   if (!L.length) { toast('分享的內容裡沒有網址'); return; }
-  if (!S.autoDl) { addUrls(t); return; }
-  const fresh = L.filter(u => !seenUrl(u)), dup = L.find(u => seenUrl(u) === 'had');
-  const grp = fresh.length > 1 ? newGrp() : '';
-  fresh.forEach(u => { LS('lastClip', u); enqueue(u, S.quality, null, { sponsor: S.sponsor, grp, grpN: fresh.length }); });
-  if (fresh.length) toast(fresh.length > 1 ? `已開始下載 ${fresh.length} 個` : '已開始下載');
-  else if (dup) askClip(dup, true);
+  window.onShareBg(t, true);
 };
 // ---- 🪟 分屏：請系統把另一個 App 開在旁邊（平板大螢幕上會直接進分屏，手機分身裡也試得到）
 function splitGo(pkg, name) {
@@ -769,6 +768,7 @@ const byPid = pid => Q.find(j => j.pid === pid);
 let fgLast = 0;
 window.onProg = s => {
   const p = JSON.parse(s), j = byPid(p.id); if (!j || j.state !== 'run') return;
+  j.act = Date.now();
   const line = String(p.line || '');
   if (p.pct > 0) j.pct = p.pct;
   let m, inst = 0;
@@ -782,8 +782,15 @@ window.onProg = s => {
   drawCard(j);
   if (Date.now() - fgLast > 2000) { fgLast = Date.now(); const r = Q.filter(x => x.state === 'run'); call('fgText', r.map(x => `${(x.title || x.site).slice(0, 18)} ${x.pct ? Math.round(x.pct) + '%' : ''}`).join('、')); }
 };
+setInterval(() => {                                                          // 卡住偵測：進行中但 6 分鐘完全沒有任何進度
+  const now = Date.now();
+  Q.filter(j => j.state === 'run' && !j.stuck && !/合併|轉成|剪掉/.test(j.stage || '') && now - (j.act || j.t0 || now) > 360e3).forEach(j => {
+    j.stuck = '卡住了（6 分鐘沒有任何進度），已自動停止，可以按重試'; j.stop = 1; call('cancel', j.pid);
+  });
+}, 30000);
 window.onDone = s => {
   const p = typeof s === 'string' ? JSON.parse(s) : s, j = byPid(p.id); if (!j) return;
+  if (j.stuck && !p.ok) { p.msg = j.stuck; j.stuck = ''; }
   if (!p.ok && j.fast && !j.noFast && !j.stop && p.msg !== '已取消' && !/Private|unavailable|removed|No space/i.test(p.msg || '')) { j.noFast = true; j.stage = '多線下載失敗，改回一般方式…'; startJob(j); return; }
   if (!p.ok && j.hdSrc && !j.stop && p.msg !== '已取消') { j.hdSrc = false; j.noHd = true; startJob(j); return; }   // 高畫質來源抓失敗：改回原本方式
   if (!p.ok && !j.stop && p.msg !== '已取消' && j.k + 1 < triesFor(j.url).length && !/Private|unavailable|removed|Unsupported|No space|login|cookies|資料夾/i.test(p.msg || '')) {
