@@ -229,6 +229,8 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun updateCore() = Engine.updateCore("stable")
         @JavascriptInterface fun updateCoreCh(ch: String) = Engine.updateCore(ch)
         @JavascriptInterface fun jobsState() = Engine.state()
+        @JavascriptInterface fun storage() = Engine.usage()
+        @JavascriptInterface fun sweep(): Long = Engine.sweep()
         @JavascriptInterface fun drain() = Engine.drain()
         @JavascriptInterface fun fgText(t: String) { Engine.fgText = t.take(120); if (Engine.count() > 0) Notify.updateOngoing(this@MainActivity, Engine.count(), Engine.fgText) }
         /** 舊版畫面相容 */

@@ -55,11 +55,41 @@ object Engine {
     }
     fun count() = jobs.size
 
+    // ---------- 暫存清理：下載好的檔案已經搬到「下載／相簿」，App 裡面不用留任何東西
+    private fun tmpRoot() = ctx.getExternalFilesDir(null) ?: ctx.cacheDir
+    fun tmpDir(id: String) = File(tmpRoot(), "tmp_" + id.replace(Regex("[^A-Za-z0-9_~-]"), "_"))
+    private fun sizeOf(f: File?): Long = if (f == null || !f.exists()) 0L else f.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    private fun tgFiles() = File(ctx.filesDir, "tdlib/files")
+    /** 刪掉沒在用的暫存：下載到一半被系統關掉留下的 tmp_、Telegram 抓檔的快取、裝完的更新檔。回傳清掉幾 bytes */
+    @Synchronized fun sweep(): Long {
+        var freed = 0L
+        val busy = jobs.keys.map { tmpDir(it).name }.toSet()
+        listOfNotNull(ctx.getExternalFilesDir(null), ctx.cacheDir).distinct().forEach { r ->
+            r.listFiles()?.forEach { f -> if (f.name.startsWith("tmp_") && f.name !in busy) { freed += sizeOf(f); f.deleteRecursively() } }
+        }
+        if (jobs.isEmpty()) {
+            val old = System.currentTimeMillis() - 10 * 60_000L        // 10 分鐘內的先不動（可能正在用）
+            listOf(tgFiles(), File(ctx.cacheDir, "update")).forEach { d ->
+                d.walkBottomUp().filter { it.isFile && it.lastModified() < old }.forEach { val n = it.length(); if (it.delete()) freed += n }
+            }
+        }
+        return freed
+    }
+    /** 空間用量（給設定頁看） */
+    fun usage(): String {
+        val ext = ctx.getExternalFilesDir(null)
+        val tmp = listOfNotNull(ext, ctx.cacheDir).distinct().sumOf { r -> r.listFiles()?.filter { it.name.startsWith("tmp_") }?.sumOf { sizeOf(it) } ?: 0L }
+        val tg = sizeOf(tgFiles()) + sizeOf(File(ctx.cacheDir, "update"))
+        val all = sizeOf(ctx.filesDir.parentFile) + sizeOf(ext)
+        return JSONObject().put("tmp", tmp).put("cache", tg).put("all", all).put("busy", jobs.size).toString()
+    }
+
     // ---------- 背景：有工作就掛前景服務＋WakeLock，沒工作就收掉
     @Synchronized fun sync() {
         val n = jobs.size
         try {
             if (n == 0) {
+                scope.launch { try { sweep() } catch (_: Exception) {} }
                 if (fgOn) { ctx.stopService(Intent(ctx, KeepAlive::class.java)); fgOn = false }
                 wake?.let { if (it.isHeld) it.release() }; wake = null
                 return
@@ -183,7 +213,7 @@ object Engine {
         val sub = cleanSub(o.optString("sub", "")); val dest = o.optString("dest", "")
         val title = o.optString("title", ""); val notify = o.optBoolean("notify", true)
         jobs[id] = scope.launch {
-            val dir = File(ctx.getExternalFilesDir(null) ?: ctx.cacheDir, "tmp_" + id.replace(Regex("[^A-Za-z0-9_~-]"), "_"))
+            val dir = tmpDir(id)
             dir.deleteRecursively(); dir.mkdirs()
             try {
                 if (!App.ready) throw Exception("下載核心沒載入：" + App.initErr)
@@ -225,7 +255,7 @@ object Engine {
         val title = o.optString("title", ""); val notify = o.optBoolean("notify", true)
         val hdr = o.optJSONObject("headers"); val ck = o.optString("cookies", "")
         jobs[id] = scope.launch {
-            val dir = File(ctx.getExternalFilesDir(null) ?: ctx.cacheDir, "tmp_" + id.replace(Regex("[^A-Za-z0-9_~-]"), "_"))
+            val dir = tmpDir(id)
             dir.deleteRecursively(); dir.mkdirs()
             try {
                 val n = items.length(); var last = 0L
@@ -264,7 +294,7 @@ object Engine {
         val sub = cleanSub(o.optString("sub", "")); val dest = o.optString("dest", "")
         var title = o.optString("title", ""); val notify = o.optBoolean("notify", true); val gallery = o.optString("gallery", "")
         jobs[id] = scope.launch {
-            val dir = File(ctx.getExternalFilesDir(null) ?: ctx.cacheDir, "tmp_" + id.replace(Regex("[^A-Za-z0-9_~-]"), "_"))
+            val dir = tmpDir(id)
             dir.deleteRecursively(); dir.mkdirs()
             var last = 0L
             try {

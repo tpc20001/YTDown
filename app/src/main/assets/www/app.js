@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.63';
+const UI_VER = 'YTD_UI_V0.1.64';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.18（外殼）／YTD_UI_V0.1.64', ['瘦身：下載到一半被手機關掉留下的暫存、Telegram 抓檔的快取、裝完的更新檔，現在開 App 和每次下載全部做完都會自動清掉（下載好的影片本來就在「下載／相簿」，不受影響）', '設定 → 其他：看得到 App 佔用多少空間，也可以按「清理暫存」馬上清']],
   ['YTD_V0.1.17（外殼）／YTD_UI_V0.1.63', ['分享到 YT Download、複製網址，都是讀到就直接下載，不會再跳出「剪貼簿有網址／下載過了，要再下載嗎？」那條要你按的提示', '修正：同一則貼文換了追蹤碼（?igsh= 之類）會被當成新的、幾小時前的舊剪貼簿又被讀一次而卡住「下載過了」', '剪貼簿只收支援的網站，複製文章、別的連結不會去解析；貼上鈕不會再把文章塞進網址框', '解析超過 30 秒會停下來說明；下載 6 分鐘完全沒動會自動停止，可以按重試', '拿掉「連續收集」和分享選單的「收集到 YT Download」（現在都直接下載）']],
   ['YTD_V0.1.16（外殼）／YTD_UI_V0.1.62', ['在 IG、YouTube、TikTok 等按「分享」→ 選 YT Download，現在直接加入下載，畫面不會跳過來，只跳一個「已加入下載」的小提示', 'YT Download 完全沒開的時候，會在背景叫起來收下網址，收完自己退回去', '已經下載過的會提示，不會重複下載']],
   ['YTD_UI_V0.1.61', ['「📋 貼上」按鈕縮成原本的四分之一高（點一下畫面就會自動讀，按鈕只是備用）', '讀到網址時，畫面中間會跳出「＋1」的動畫：光圈擴散、光點噴開，最後縮小飛進網址框，加一下震動（暗色，不刺眼）']],
@@ -265,6 +266,7 @@ function page(p) {
   if (p === 'hist') { hShow = 100; drawHist(); histToBottom(); }
   if (p === 'sites') drawSites();
   if (p === 'set' || p === 'upd') drawSet();
+  if (p === 'set') setTimeout(stoShow, 50);
   if (p !== 'dl') { autoStop(); stagePause(); }
   window.scrollTo(0, 0);
   LS('page', p);
@@ -1507,6 +1509,17 @@ $('#bApkUrl').onclick = () => { const el = $('#apkUrl'); if (el.hidden) { el.hid
 window.onApk = s => { const r = JSON.parse(s); $('#updMsg').textContent = r.msg; if (r.stage === 'dl') { if (!$('#updBar').hidden) $('#updTxt').textContent = r.msg; } else toast(r.msg, 4000); };
 $('#bPick').onclick = () => { $('#updMsg').textContent = '選檔中…'; call('pickUpdate'); };
 $('#bReload').onclick = () => { if (has('reload')) N.reload(); else location.reload(); };
+function stoShow() {
+  const el = $('#stoInfo'); if (!el) return;
+  if (!has('storage')) { el.textContent = '要裝新外殼 YTD_V0.1.18 才看得到'; $('#bSweep').hidden = true; return; }
+  const u = jcall('storage') || {};
+  el.textContent = `共 ${fmtSize(u.all) || '0 B'}（下載核心本身要 100～200 MB，這部分清不掉）· 可清的暫存 ${fmtSize(u.tmp + u.cache) || '0 B'}`;
+}
+$('#bSweep').onclick = () => {
+  if (!has('sweep')) { toast('這版外殼不支援，請裝新外殼'); return; }
+  const n = N.sweep();
+  toast(n > 0 ? '清掉了 ' + fmtSize(n) : '沒有可以清的暫存', 2200); stoShow();
+};
 $('#bResetUi').onclick = () => { if (has('resetUi')) N.resetUi(); else toast('這版外殼不支援'); };
 
 // ---- 備份
