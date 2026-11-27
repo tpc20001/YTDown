@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.69';
+const UI_VER = 'YTD_UI_V0.1.70';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.70', ['修正 0.1.68／0.1.69：播放器和下載頁的時間顯示會卡死、下載完不會自動播放（請盡快更新）', '下載頁影片的 ▶ 鈕從畫面正中間移到左下角，不擋畫面']],
   ['YTD_UI_V0.1.69', ['效率：設定、紀錄讀過一次就留在記憶體，不再每次重新解析（紀錄多時明顯變順）', '下載進度一個畫面週期最多重畫一次，同時下載好幾個也不會卡']],
   ['YTD_V0.1.20（外殼）／YTD_UI_V0.1.68', ['內部整理：三種下載方式（一般、IG／TikTok 直接抓、Telegram）共用同一套存檔流程，程式更短、更好維護；功能不變']],
   ['YTD_UI_V0.1.67', ['平台頁：IG、FB 拿掉「App 內登入」，只留貼代碼', '下載頁：一次好幾個、或還沒有縮圖時，進度改成一塊小卡片，不再佔掉大半個畫面的黑框；進度百分比不重複顯示', '沒縮圖的小格改成深灰底']],
@@ -127,7 +128,7 @@ function smooth(j, pct, inst, eta) {
 let reqSeq = 0; const pend = {};
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const vplay = v => { const p = v.play(); if (p && p.catch) p.catch(() => {}); };
-const fd = t => fd(t);
+const fd = t => fmtDur(t) || '0:00';
 function httpReq(spec) { return new Promise(res => N.http(req('h', res), JSON.stringify(spec))); }
 
 // =====================================================================
@@ -737,7 +738,7 @@ window.onDone = s => {
   if (p.ok && S.vibe) call('vibrate', 60);
   if (j.site === 'Instagram') igPace();
   j.doneAt = Date.now();
-  drawCard(j); trimDone(); saveQ(); pump();
+  drawStage(); drawQueue(); counts(); trimDone(); saveQ(); pump();   // 馬上畫好，自動播放才不會被重畫打斷
   if (p.ok) autoBegin(j);
 };
 
@@ -855,7 +856,7 @@ function stageWire(v) { // 把影片接上進度條、播放鈕（只對「現�
   v.addEventListener('timeupdate', () => { const bar = q('.st-bar'); if (!mine() || (stageG && stageG.mode === 'seek') || !isFinite(v.duration) || !bar) return; bar.value = Math.round(v.currentTime / v.duration * 1000); q('.st-cur').textContent = fd(v.currentTime); q('.st-dur').textContent = fmtDur(v.duration); });
   v.addEventListener('play', () => { if (!mine()) return; const b = q('.st-play'), c = q('.st-ctl'); if (b) b.hidden = true; if (c) c.hidden = false; muteIcon(v); call('keepOn', true); });
   v.addEventListener('volumechange', () => { if (mine()) muteIcon(v); });
-  v.addEventListener('pause', () => { if (!mine()) return; const b = q('.st-play'); if (b) b.hidden = false; call('keepOn', false); });
+  v.addEventListener('pause', () => { if (!mine()) return; const b = q('.st-play'), c = q('.st-ctl'); if (b && (!c || c.hidden)) b.hidden = false; call('keepOn', false); });
   v.addEventListener('ended', () => { if (!mine()) return; const b = q('.st-play'); if (b && !auto.on) b.hidden = false; if (!auto.on) call('keepOn', false); });
   const bad = () => { if (!mine() || q('.st-err')) return; autoStop(); const b = q('.st-play'); if (b) b.hidden = true; stageEl.insertAdjacentHTML('beforeend', '<div class="st-err"><span>這支影片的格式手機內建的播放器解不了</span><button class="btn primary" type="button" data-a="ext">用其他 App 播（例如 MX Player）</button></div>'); };
   v.addEventListener('error', bad);
@@ -1054,8 +1055,6 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
       return;
     }
     if (gg.btn === 'ext') { const f = mediaOf(j.files)[stg.idx] || (j.files || [])[0]; if (f) openF(f); return; }
-    if (gg.btn === 'prev') { stageStep(-1); return; }
-    if (gg.btn === 'next') { stageStep(1); return; }
     if (j.state !== 'ok') return;
     if (stageVid()) stageToggle();                                          // 影片：就在這一塊播
     else if (mediaOf(j.files).length) playF(j.files, j.title, stg.idx);     // 照片：點一下放大看
@@ -1116,7 +1115,6 @@ function tgBox() {
 let hFilter = '全部', hAsk = -1, hShow = 100, hMenu = -1;
 const szOf = h => (h.files || []).reduce((a, x) => a + (+x.size || 0), 0);
 const mediaOf = files => (files || []).filter(f => f && f.uri && /^(video|audio|image)\//.test(mimeOf(f)));
-const hThumb = h => { const f = !h.gone && (h.files || []).find(x => /^image\//.test(x.mime || '')); return f ? f.uri : h.thumb; };   // 照片用自己的檔當縮圖，不會過期
 const newGrp = () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const hUrls = h => h.us && h.us.length ? h.us : [h.u];
 const grpTitle = h => `${h.title0 || '一組下載'}${h.grpN > 1 ? ` 等 ${h.grpN} 個網址` : ''}`;

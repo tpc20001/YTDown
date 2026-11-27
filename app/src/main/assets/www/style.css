@@ -209,8 +209,7 @@ body.locked{overflow:hidden}
 .player.ui .p-top,.player.ui .p-bot{opacity:1;pointer-events:auto}
 .p-top{top:0;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 22px;background:linear-gradient(#000c,#0000)}
 .p-top span{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.p-bot{bottom:0;display:flex;align-items:center;gap:10px;padding:22px 14px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(#0000,#000c);font-size:13px;font-variant-numeric:tabular-nums}
-.p-bot{flex-wrap:wrap}
+.p-bot{bottom:0;display:flex;align-items:center;gap:10px;padding:22px 14px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(#0000,#000c);font-size:13px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
 .p-bot input{flex:1;min-width:0;accent-color:#4dc9ff;height:28px}
 .p-tools{width:100%;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
 .p-tools button{padding:6px 12px;font-size:13px}
@@ -360,3 +359,4 @@ video.thumb{object-fit:cover;background:#000;pointer-events:none}
 .stage.batch .st-over .bar,.stage.bare .st-over .bar{background:var(--surf2)}
 .stage.empty{height:auto;min-height:120px}
 .ql-t,div.thumb{background:var(--surf2)}
+.st-play{left:12px;top:auto;bottom:12px;transform:none;width:44px;height:44px;font-size:17px;background:rgba(0,0,0,.45)}
