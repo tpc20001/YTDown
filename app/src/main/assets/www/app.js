@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.76';
+const UI_VER = 'YTD_UI_V0.1.77';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.77', ['紀錄搜尋：打字停一下才重新整理，紀錄多時打字不卡']],
   ['YTD_UI_V0.1.76', ['紀錄很多時更順：多張貼文裡的影片小圖也改成捲到附近才載入（以前一次全部載入）', '打不開的小圖不再顯示破圖示']],
   ['YTD_UI_V0.1.75', ['夜間更舒服：選中的選項、IG 的「下載」鈕、播放器的開關鈕都改成暗底＋藍框，不再是整塊亮藍色']],
   ['YTD_UI_V0.1.74', ['再清掉一批舊外殼才需要的檢查和提示文字，程式更短']],
@@ -1222,7 +1223,7 @@ $('#hist').onclick = e => {
   else if (a === 'delNo') { hAsk = -1; drawHist(); }
   else if (a === 'delYes') { let n = 0; (h.files || []).forEach(x => { if (x.uri && N.deleteFile(x.uri)) n++; }); h.gone = true; LS('hist', H); hAsk = -1; drawHist(); toast(n ? `刪掉 ${n} 個檔案` : '檔案可能已經不在了'); }
 };
-$('#hSearch').addEventListener('input', () => { hShow = 100; drawHist(); });
+$('#hSearch').addEventListener('input', () => { clearTimeout(drawHist.t); drawHist.t = setTimeout(() => { hShow = 100; drawHist(); }, 200); });   // 打字停一下才重畫
 $('#hSort').onchange = () => { hShow = 100; LS('hsort', $('#hSort').value); drawHist(); };
 { if (!LS('hsortV2')) { LS('hsort', 'old'); LS('hsortV2', 1); } const v = LS('hsort') || 'old'; $('#hSort').value = v; }
 // 打開紀錄頁：「新的在最下面」時直接捲到最下面（縮圖載入後再補捲一次）
