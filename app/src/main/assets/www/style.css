@@ -52,10 +52,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
 .chip small{color:var(--mut);font-size:11px}
-.chip[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:#04121b}
-.chip[aria-pressed="true"] small{color:#04121b;opacity:.7}
+.chip[aria-pressed="true"]{background:rgba(77,201,255,.16);border-color:var(--acc);color:var(--acc);font-weight:600}
+.chip[aria-pressed="true"] small{color:inherit;opacity:.7}
 .opts .chip{background:transparent}
-.opts .chip[aria-pressed="true"]{background:var(--acc);color:#04121b}
+
 
 /* 平台標籤（不用平台商標，只用簡稱） */
 .badge{flex:none;display:inline-grid;place-items:center;min-width:34px;height:22px;padding:0 6px;border-radius:6px;background:var(--surf2);border:1px solid var(--line);font:700 11px var(--font);color:var(--fg);letter-spacing:.02em}
@@ -168,7 +168,7 @@ img.thumb{object-fit:contain;background:#000}
 .card .thumb{width:112px}
 /* 剪貼簿／新版本提示：按鈕大一點、主按鈕用醒目的藍色 */
 .clip{border-width:2px;padding:12px}
-.clip .btn{padding:10px 14px;font-size:14px}.clip .btn.primary{background:var(--acc);border-color:var(--acc);color:#04121b;font-weight:800;font-size:16px;padding:11px 22px}
+.clip .btn{padding:10px 14px;font-size:14px}.clip .btn.primary{font-size:15px;padding:10px 20px}
 
 /* ---- V0.1.19：播放器、IG 帳號瀏覽、紀錄 ---- */
 body.locked{overflow:hidden}
@@ -187,7 +187,7 @@ body.locked{overflow:hidden}
 .pane-t{display:flex;flex-direction:column;min-width:0}
 .pane-t b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pane-bar{position:sticky;top:57px;z-index:2;display:flex;gap:8px;align-items:center;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--line)}
-.pane-bar .btn.primary{background:var(--acc);border-color:var(--acc);color:#04121b;font-size:15px;padding:9px 18px}
+.pane-bar .btn.primary{font-size:15px;padding:9px 18px}
 .pane-bar .btn.primary:disabled{opacity:.4}
 .ig-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px}
 @media (min-width:640px){.ig-grid{grid-template-columns:repeat(5,1fr)}}
@@ -213,7 +213,7 @@ body.locked{overflow:hidden}
 .p-bot input{flex:1;min-width:0;accent-color:#4dc9ff;height:28px}
 .p-tools{width:100%;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
 .p-tools button{padding:6px 12px;font-size:13px}
-.p-tools button.on,.p-rate button.on{background:#4dc9ff;color:#04121b}
+.p-tools button.on,.p-rate button.on{background:rgba(77,201,255,.25);color:#9fe0ff;box-shadow:inset 0 0 0 1px #4dc9ff}
 .player.fill video{object-fit:cover}
 .p-rate{position:absolute;right:12px;bottom:calc(118px + env(safe-area-inset-bottom,0px));z-index:3;background:rgba(10,12,14,.92);border:1px solid #2a2e35;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
 .p-rate-row{display:flex;align-items:center;justify-content:center;gap:6px}
@@ -225,7 +225,7 @@ body.locked{overflow:hidden}
 .p-seek b{font-size:22px}
 .p-seek span{display:block;color:#4dc9ff;font-size:14px;margin-top:2px}
 .p-err{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(320px,calc(100% - 48px));background:#15171b;border:1px solid #2a2e35;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;text-align:center;font-size:14px;z-index:2}
-.p-err button{background:#4dc9ff;color:#04121b;font-weight:700}
+.p-err button{background:#173444;color:#c9eeff;border:1px solid #4dc9ff;font-weight:700}
 @media (prefers-reduced-motion:reduce){.p-top,.p-bot{transition:none}}
 .tbtn{width:112px}
 .tbtn .thumb{width:100%;max-width:none}
@@ -288,7 +288,7 @@ body.locked{overflow:hidden}
 .pg-s{flex:none;width:100%;height:100%;position:relative;background:#000}
 .pg-s img,.pg-s video{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none;user-select:none}
 .st-err{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;width:min(320px,calc(100% - 40px));background:#15171b;border:1px solid #2a2e35;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;text-align:center;color:#fff;font-size:14px}
-.st-err .btn.primary{background:#4dc9ff;border-color:#4dc9ff;color:#04121b}
+
 
 /* ---- V0.1.39：排隊清單 ---- */
 .qlist{margin-top:14px;display:flex;flex-direction:column;gap:6px}

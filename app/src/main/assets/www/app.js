@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.74';
+const UI_VER = 'YTD_UI_V0.1.75';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.75', ['夜間更舒服：選中的選項、IG 的「下載」鈕、播放器的開關鈕都改成暗底＋藍框，不再是整塊亮藍色']],
   ['YTD_UI_V0.1.74', ['再清掉一批舊外殼才需要的檢查和提示文字，程式更短']],
   ['YTD_V0.1.23（外殼）／YTD_UI_V0.1.73', ['完成通知合成一則「完成 N 個、失敗 N 個」，不會一個下載一則堆滿通知欄；打開 App 就清掉', 'Telegram 下載完直接搬檔，不再多複製一次，大影片存得比較快']],
   ['YTD_V0.1.22（外殼）／YTD_UI_V0.1.72', ['修正：分享一個已經下載過的網址時，會先跳「已加入」又跳「略過」；現在只會跳一個正確的提示', 'App 內登入／逛網站頁的按鈕改成暗色']],
