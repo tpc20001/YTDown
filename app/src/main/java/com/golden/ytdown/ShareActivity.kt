@@ -21,8 +21,7 @@ class ShareActivity : Activity() {
             else try {
                 startActivity(Intent(this, MainActivity::class.java).setAction(Intent.ACTION_SEND).putExtra(Intent.EXTRA_TEXT, t)
                     .putExtra(MainActivity.EXTRA_BG, true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION))
-            } catch (_: Exception) {}
-            Toast.makeText(this, "⬇ 已加入 YT Download 下載", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {}   // 「已加入」或「下載過了，略過」由畫面那邊判斷後再提示，不會兩個打架
         }
         finish()
         overridePendingTransition(0, 0)
