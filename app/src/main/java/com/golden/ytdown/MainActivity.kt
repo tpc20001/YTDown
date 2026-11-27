@@ -194,7 +194,6 @@ class MainActivity : AppCompatActivity() {
         // ---- 版本、狀態
         @JavascriptInterface fun shellVer() = SHELL
         @JavascriptInterface fun uiVer() = liveVer().ifEmpty { builtinVer() }
-        @JavascriptInterface fun builtinUiVer() = builtinVer()
         @JavascriptInterface fun coreState() = jo("ready" to App.ready, "err" to App.initErr,
             "ytdlp" to (try { YoutubeDL.getInstance().versionName(this@MainActivity) } catch (e: Exception) { "" }),
             "js" to File(applicationInfo.nativeLibraryDir, "libqjs.so").exists(), "aria2" to App.aria2)
@@ -226,32 +225,18 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun tgJob(spec: String) = Tg.job(spec)
         @JavascriptInterface fun probe(id: String, url: String, spec: String) = Engine.probe(id, url, spec)
         @JavascriptInterface fun exec(id: String, url: String, spec: String) = Engine.exec(id, url, spec)
-        @JavascriptInterface fun updateCore() = Engine.updateCore("stable")
         @JavascriptInterface fun updateCoreCh(ch: String) = Engine.updateCore(ch)
         @JavascriptInterface fun jobsState() = Engine.state()
         @JavascriptInterface fun storage() = Engine.usage()
         @JavascriptInterface fun sweep(): Long = Engine.sweep()
         @JavascriptInterface fun drain() = Engine.drain()
         @JavascriptInterface fun fgText(t: String) { Engine.fgText = t.take(120); if (Engine.count() > 0) Notify.updateOngoing(this@MainActivity, Engine.count(), Engine.fgText) }
-        /** 舊版畫面相容 */
-        @JavascriptInterface fun download(id: String, url: String, mode: String) = Engine.job(JSONObject().put("id", id).put("url", url).put("mode", mode).toString())
-        @JavascriptInterface fun downloadEx(id: String, url: String, mode: String, extra: String) =
-            Engine.job(JSONObject().put("id", id).put("url", url).put("mode", mode).put("args", try { org.json.JSONArray(extra) } catch (_: Exception) { org.json.JSONArray() }).toString())
 
         // ---- 登入、瀏覽
         @JavascriptInterface fun browse(url: String, mode: String, key: String, domains: String) {
             runOnUiThread {
                 startActivity(Intent(this@MainActivity, BrowserActivity::class.java)
                     .putExtra("url", url).putExtra("mode", mode).putExtra("key", key).putExtra("domains", domains))
-            }
-        }
-        /** 新版瀏覽頁：spec={url,mode,key,domains,btn:"按鈕文字",hint:"上方提示",js:"按鈕按下時在網頁裡執行的程式"} → onBrowse {mode,key,url,title,result} */
-        @JavascriptInterface fun browse2(spec: String) {
-            val o = try { JSONObject(spec) } catch (e: Exception) { return }
-            runOnUiThread {
-                startActivity(Intent(this@MainActivity, BrowserActivity::class.java)
-                    .putExtra("url", o.optString("url")).putExtra("mode", o.optString("mode", "browse")).putExtra("key", o.optString("key"))
-                    .putExtra("domains", o.optString("domains")).putExtra("btn", o.optString("btn")).putExtra("hint", o.optString("hint")).putExtra("js", o.optString("js")))
             }
         }
         @JavascriptInterface fun cookieInfo(key: String): String { val f = Engine.cookieFile(key); return jo("has" to (f.exists() && f.length() > 0), "time" to (if (f.exists()) f.lastModified() else 0L)) }
@@ -339,7 +324,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         @JavascriptInterface fun appSettings() { runOnUiThread { try { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) } catch (_: Exception) {} } }
-        @JavascriptInterface fun shareLink(t: String) { runOnUiThread { try { startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, t), "分享連結")) } catch (_: Exception) {} } }
         @JavascriptInterface fun openUrl(u: String) { runOnUiThread { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (_: Exception) {} } }
 
         /** 萬用網路讀取（不受網頁跨網域限制）→ onHttp {id,ok,status,body} */
@@ -360,24 +344,6 @@ class MainActivity : AppCompatActivity() {
                     jo("id" to id, "ok" to (code in 200..299), "status" to code, "body" to body)
                 } catch (e: Exception) { jo("id" to id, "ok" to false, "status" to 0, "body" to (e.message ?: "")) }
                 js("onHttp", r)
-            }
-        }
-
-        /** 問一批網址各有多大：spec={urls:[...],headers:{},cookies} → 每個回一次 onHead {id,i,ok,len,type} */
-        @JavascriptInterface fun head(id: String, spec: String) {
-            ui.launch(Dispatchers.IO) {
-                val o = try { JSONObject(spec) } catch (e: Exception) { return@launch }
-                val urls = o.optJSONArray("urls") ?: return@launch
-                val sem = kotlinx.coroutines.sync.Semaphore(6)
-                (0 until urls.length()).map { i ->
-                    launch {
-                        sem.acquire()
-                        try {
-                            val r = try { Net.head(urls.getString(i), o.optJSONObject("headers"), o.optString("cookies", "")) } catch (e: Exception) { JSONObject().put("ok", false).put("len", -1) }
-                            js("onHead", r.put("id", id).put("i", i).toString())
-                        } finally { sem.release() }
-                    }
-                }
             }
         }
 

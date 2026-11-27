@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.64';
+const UI_VER = 'YTD_UI_V0.1.65';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -9,7 +9,6 @@ const LS = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage
 const has = f => !!(N && typeof N[f] === 'function');
 const call = (f, ...a) => { if (!has(f)) return null; try { return N[f](...a); } catch (e) { return null; } };
 const jcall = (f, ...a) => { const r = call(f, ...a); try { return r ? JSON.parse(r) : null; } catch (e) { return null; } };
-const newShell = () => has('exec');   // 外殼 V0.1.06 以上才有的功能
 
 // ---------- 分屏／小窗：整個畫面等比例縮小，按鈕不會變得比內容還大
 let ZM = 1, fitW = 0;
@@ -30,6 +29,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.19（外殼）／YTD_UI_V0.1.65', ['程式瘦身：拿掉已經不用的「剪貼簿提示條」「連續收集」「🎛 轉盤」「左邊上一則／下一則」和舊外殼的相容程式，畫面更乾淨、反應更快（上下滑換一則照舊）', '更新紀錄只留最近的，太舊的合成一行']],
   ['YTD_V0.1.18（外殼）／YTD_UI_V0.1.64', ['瘦身：下載到一半被手機關掉留下的暫存、Telegram 抓檔的快取、裝完的更新檔，現在開 App 和每次下載全部做完都會自動清掉（下載好的影片本來就在「下載／相簿」，不受影響）', '設定 → 其他：看得到 App 佔用多少空間，也可以按「清理暫存」馬上清']],
   ['YTD_V0.1.17（外殼）／YTD_UI_V0.1.63', ['分享到 YT Download、複製網址，都是讀到就直接下載，不會再跳出「剪貼簿有網址／下載過了，要再下載嗎？」那條要你按的提示', '修正：同一則貼文換了追蹤碼（?igsh= 之類）會被當成新的、幾小時前的舊剪貼簿又被讀一次而卡住「下載過了」', '剪貼簿只收支援的網站，複製文章、別的連結不會去解析；貼上鈕不會再把文章塞進網址框', '解析超過 30 秒會停下來說明；下載 6 分鐘完全沒動會自動停止，可以按重試', '拿掉「連續收集」和分享選單的「收集到 YT Download」（現在都直接下載）']],
   ['YTD_V0.1.16（外殼）／YTD_UI_V0.1.62', ['在 IG、YouTube、TikTok 等按「分享」→ 選 YT Download，現在直接加入下載，畫面不會跳過來，只跳一個「已加入下載」的小提示', 'YT Download 完全沒開的時候，會在背景叫起來收下網址，收完自己退回去', '已經下載過的會提示，不會重複下載']],
@@ -39,55 +39,7 @@ const CHANGELOG = [
   ['YTD_UI_V0.1.58', ['播放器改成像抖音：在畫面任何地方往上滑＝下一則（較舊）、往下滑＝上一則（較新），照紀錄頁的順序；左右滑一樣是拖進度（照片是換張）。手機、平板、橫的影片都一樣', '關掉播放器改用左上角 ✕ 或返回鍵（不是從紀錄打開的單一個檔，往下滑一樣是關掉）', '🎛 轉盤和左下角上一則／下一則先收起來，工具列的 🎛 可以叫回來（轉盤也調大了一點）']],
   ['YTD_UI_V0.1.57', ['左邊的上一則／下一則縮成很小一塊，貼在最左下角（每半大約 1.6 公分），拇指一定搆得到']],
   ['YTD_UI_V0.1.56', ['防呆：返回鍵最多只會回到下載頁（貼上的那一頁），按幾次都不會把 YT Download 關掉；分屏時誤按也不會讓左邊的視窗不見']],
-  ['YTD_UI_V0.1.55', ['左邊的上一則／下一則縮成原本「下一則」那一段的大小，上半＝較新、下半＝較舊，整組再往下一點，拇指比較按得到', '🎛 轉盤改成扁的橢圓：比較矮、貼著底邊往右延伸，不會只擠在左下角']],
-  ['YTD_UI_V0.1.54', ['大「貼上」按鈕改成暗色（深色底＋淡藍邊框），晚上用不刺眼；按下去的綠／黃／紅提示也調暗了']],
-  ['YTD_V0.1.15（外殼）／YTD_UI_V0.1.53', ['分享選單多了「收集到 YT Download」：在 IG、Telegram 等按分享選它，網址直接收進來，畫面不會跳走，只跳一個「已收集第 N 個」的小提示', '收完回 YT Download 按一次下載＝一組（原本的「YT Download」分享還是直接下載）']],
-  ['YTD_UI_V0.1.52', ['紀錄的縮圖改用手機裡的檔案本身（照片直接顯示、影片抓一格畫面），每一則都有縮圖；手機播不了的格式才用網站給的縮圖', '看過的會標「✓ 看過」（多張的標看過幾張），一張一張的小圖看過的會變暗打勾，比較不會點到重複的', '播放時左邊邊緣有兩條細白線：按上面那段＝較新的一則、下面那段＝較舊的一則（照紀錄頁的順序），觸控範圍大約 3 公分寬']],
-  ['YTD_UI_V0.1.51', ['橫的影片不再自動轉成橫向全螢幕，照你手上拿的方向（直的）播放', '想要橫向最大畫面看：按右下角的 ⟳，再按一次轉回來']],
-  ['YTD_UI_V0.1.50', ['下載頁的「📋 貼上」變成一個超大的按鈕，放在最上面', '按下去會有 1.5 秒的動畫和震動：綠色「＋1 第 N 個」＝加進去了，黃色＝這個已經加過了，紅色＝剪貼簿沒有網址']],
-  ['YTD_V0.1.14（外殼）／YTD_UI_V0.1.49', ['🧪 新的「🪟 分屏」：挑一個 App（例如 Telegram），YT Download 會請系統把它開在旁邊，平板上會直接進分屏，手機分身裡也可以試', '長按 YT Download 圖示多了「分屏」捷徑，拖到桌面就是一鍵分屏（跟上次選的 App）']],
-  ['YTD_V0.1.13（外殼）／YTD_UI_V0.1.48', ['一次按下載的多個網址（或分享進來的多個、IG 帳號勾選的多則）算成一組：紀錄裡合成一筆，所有照片影片放在一起，標出幾個網址、幾個失敗；再下載、複製連結也是整組', '新的「📋 連續收集」：打開後，在別的 App 複製網址，回到 YT Download（小窗點一下就好）就自動加進去，不用再按貼上；收完按一次下載＝一組', '外殼：小窗被點到時也會讀剪貼簿（以前要整個 App 回到前面才讀）']],
-  ['YTD_UI_V0.1.47', ['🎛 轉盤改成看不見：左下角一樣可以順時針轉快轉、逆時針轉倒轉，但不畫唱盤、不擋畫面', '叫出控制列時，左下角的進度條、按鈕照樣按得到']],
-  ['YTD_UI_V0.1.46', ['新的 🎛 轉盤：播放影片時左下角有一塊四分之一圓的唱盤，左手拇指順時針轉＝快轉、逆時針轉＝倒轉；轉慢＝細調、轉快＝跳很遠，手壓著畫面跟著走，放開從那裡播', '平板預設打開、手機預設關，下面工具列的 🎛 可以開關（會記住）']],
-  ['YTD_V0.1.12（外殼）／YTD_UI_V0.1.45', ['修正：裝了新外殼 V0.1.11 之後，App 還是一直說是 V0.1.10、一直叫你更新（外殼的版本號寫死了沒跟著改）', '外殼版本改成直接讀安裝檔的版本，以後不會再對不上']],
-  ['YTD_UI_V0.1.44', ['下載完自動播放時一律先靜音，右下角 🔇 點一下就有聲音（只開這一支，下一支還是靜音）']],
-  ['YTD_UI_V0.1.43', ['播放時左右滑（或拖進度條）手壓著，畫面會跟著換到那個時間點，放開就從那裡開始播；方便找關鍵畫面', '速度：點右下的 1x，用 －／＋ 每次調 0.1 倍（0.25～4 倍），或直接點 0.5／1／1.25／1.5／2，會記住', '長按畫面＝暫時 2 倍速，放開恢復', '新按鈕：◀▮ ▮▶ 逐格看、A-B 重複一段、🔁 整部重複、⛶ 填滿畫面（會記住）', '下載頁大畫面拖進度也一樣會跟著換畫面']],
-  ['YTD_UI_V0.1.42', ['小窗、分屏時整個畫面等比例縮小，按鈕不會變得很大把要看的內容擠小', '縮小時左右滑換張、點兩下快轉的位置也跟著對準']],
-  ['YTD_V0.1.11（外殼）／YTD_UI_V0.1.41', ['支援小米三指分屏、小窗：可以跟其他 App 一起開', '分屏時播放影片不會再強制轉橫向（避免分屏被退出）']],
-  ['YTD_UI_V0.1.40', ['一次丟好幾個時，大畫面改顯示「這一批」的總進度（完成幾個／共幾個、合計速度），下面清單照順序列出每一個（包含已完成的），另有「全部取消」']],
-  ['YTD_UI_V0.1.39', ['下載頁的大畫面下面多了「排隊清單」：其他正在下載、排隊中的都看得到，可以個別取消', '同時下載預設改成 3 個，並依平台自動限制：YouTube 最多 2 個（每個本身已經多線）、Telegram 最多 3 個、IG 一次 1 個（慢慢抓）']],
-  ['YTD_UI_V0.1.38', ['Telegram 登入後不再先預覽，貼上就直接下載', '預覽失敗不再顯示紅字（只有需要你處理的，例如要登入，才會提示）', '回到 App 時多讀幾次剪貼簿，平板上也能穩定自動下載']],
-  ['YTD_V0.1.10（外殼）／YTD_UI_V0.1.37', ['修正：Telegram 登入一直卡在「連線到 Telegram 中…」']],
-  ['YTD_UI_V0.1.36', ['「相容格式優先」：同樣的解析度優先抓 H.264（幾乎所有手機、平板都能播），沒有才依序退到 VP9、最後才是 AV1', '聲音優先抓 AAC（m4a）']],
-  ['YTD_UI_V0.1.35', ['預設避開 AV1 格式（很多手機解不了，App 內播放器、相簿會播不出來），改抓 VP9／H.264，畫質一樣', '影片在 App 裡播不了時，畫面上會直接出現「用其他 App 播」按鈕（例如 MX Player）']],
-  ['YTD_UI_V0.1.34', ['YouTube 多線加速：把影片切成很多小段，同時下載好幾段（預設 8 條，設定裡可調 4～16）', '多線下載失敗時，會自動改回一般方式再試一次']],
-  ['YTD_UI_V0.1.33', ['YouTube 下載改成每次只要 10 MB 一段，減少被 YouTube 限速（大檔、4K 越到後面越慢的情況）']],
-  ['YTD_UI_V0.1.32', ['Telegram：可以登入你自己的帳號（平台 → Telegram），網頁版拿不到的大影片、相簿也能下載', 'Telegram 沒登入、網頁版又沒提供時，錯誤訊息會直接說明']],
-  ['YTD_V0.1.09（外殼）', ['加入 Telegram 官方的 TDLib，可以用自己的帳號登入下載']],
-  ['YTD_UI_V0.1.31', ['多張的貼文改成像 IG 那樣一頁一張：滑一下就換下一張，會自動對齊，張跟張之間留一點空隙', '自動播放：每張照片停 1 秒，用 0.5 秒滑到下一張，最後一張會接回第一張', '影片那一頁：滑進來就開始播，停在這頁完整播一次，再播的時候滑到下一張']],
-  ['YTD_UI_V0.1.30', ['多張的貼文改成「膠卷」：所有照片一格接一格並排、中間沒有縫，慢慢往左捲動，一直循環', '膠卷裡的影片：進畫面就開始播，捲到正中間會停住完整播一次，再播的時候繼續往左捲', '可以用手指左右拖動膠卷；點照片放大看，點影片播放／暫停']],
-  ['YTD_UI_V0.1.29', ['下載完 2 秒後自動播放：影片連播 3 次', '多張的貼文會自動輪播：照片每張停幾秒，慢慢往左滑到下一張，一直循環', '輪播遇到影片：滑進來時就開始播，停在中間完整播一次，再播的時候滑出去換下一個', '換張有滑動的動畫；碰一下畫面就停止自動播放（設定可關）']],
-  ['YTD_UI_V0.1.28', ['修正：多張貼文上的「‹ ›」按鈕會變成放大，現在會正確換張']],
-  ['YTD_UI_V0.1.27', ['影片直接在下載頁中間那一塊播放，不會放大、也不會跳到另一個播放器', '點畫面＝播放／暫停；播放時左右滑＝快轉（滑越快跳越多、越慢越精準）；下面有進度條', '想放大再按「全螢幕播放」']],
-  ['YTD_UI_V0.1.26', ['同一個網址不會重複自動下載：下載過的會問「要再下載一次嗎」，要你按了才會抓', '下載頁改成中間一個大畫面：下載中看進度，下載完直接顯示影片或照片', '多張的貼文可以在大畫面上左右滑，點一下放到全螢幕', '下載頁下面不再列清單，舊的都在「紀錄」', '沒有貼網址時，畫質選項會收起來，讓畫面更大']],
-  ['YTD_UI_V0.1.25', ['全自動：打開 App 時剪貼簿有影片網址，就直接用預設畫質下載，不用按任何按鈕（設定可關）', '從其他 App 分享進來也一樣直接下載', '下載頁只留最新完成的那一筆，其他的都收在「紀錄」']],
-  ['YTD_UI_V0.1.24', ['TikTok：下載前先找有沒有更高畫質的來源（透過 tikwm.com 查詢），有就用高畫質的，沒有就照原本方式', 'TikTok 的照片輪播貼文也能下載了', '設定裡可以關掉這個功能']],
-  ['YTD_UI_V0.1.23', ['照片可以直接存到手機相簿（設定 → 存到相簿：關／只有照片／照片和影片）', '紀錄裡一則貼文有很多張時，全部攤開顯示，點哪張就看哪張', 'IG 帳號瀏覽改得更保守：一次只載入 12 則（跟 IG 網頁一樣），不再先查帳號資料', 'IG 擋住時會顯示 IG 實際回了什麼']],
-  ['YTD_V0.1.08（外殼）', ['照片、影片可以存進相簿（DCIM/YTDown）']],
-  ['YTD_UI_V0.1.22', ['新增「更新」分頁：檢查更新、更新下載核心、每一版改了什麼，都集中在這裡', '有新版本時，「更新」分頁上會出現「新」的標記']],
-  ['YTD_UI_V0.1.21', ['平台頁：已登入的網站多了「重貼」，可以直接換新的代碼', 'IG、FB 多了「App 內登入」當備用（如果你已經在 App 的瀏覽器裡登入過，按一下就能沿用）', 'IG 登入失敗時會顯示 IG 實際回了什麼，方便找原因']],
-  ['YTD_UI_V0.1.20', ['Instagram、Facebook 改成只用「貼代碼」登入（不在 App 裡輸入帳號密碼，避開 Meta 的驗證和鎖帳號風險）', 'IG 慢慢下載：一次只抓一則、每則隔幾秒、每 20 則休息 2～4 分鐘（設定可關）', 'IG 帳號瀏覽載入貼文時也放慢', '支援平台加上 Telegram（公開頻道貼文）']],
-  ['YTD_UI_V0.1.19', ['Instagram：照片、影片、多張貼文、限時動態都能下載（要先在「平台」登入 IG）', 'IG 帳號瀏覽：搜尋帳號或貼上個人頁網址，一次載入 100 則、預設全勾、可以一次全部下載', '內建播放器：紀錄裡直接播放影片、看照片；左右滑快轉（滑越快跳越多、越慢越精準）、點兩下左右跳 10 秒、往下滑關閉、記住上次看到哪', '紀錄：可依日期、檔案大小、標題、作者排序；可搜尋作者（打一部分就找得到）；點作者看他的全部', '平台登入多了「貼代碼」：每個平台都能貼 Cookie 登入']],
-  ['YTD_V0.1.07（外殼）', ['新增可帶登入資料的網路請求、直接下載檔案（IG 照片用）', '播放器用的橫向、螢幕不關、全螢幕', 'APK 只留 64 位元，從 160 MB 縮到約三分之一；App 內更新外殼改成邊下載邊存，並顯示進度']],
-  ['YTD_UI_V0.1.18', ['剪貼簿提示的「加入」按鈕變大、改成醒目的藍色', '縮圖完整顯示不裁切：橫式影片整張看得到，直式影片左右留黑邊']],
-  ['YTD_UI_V0.1.17', ['選「最好」時會標出實際畫質（例如：最好 1080p），下載卡片和紀錄都會記下來', '沒先解析就下載的（一次貼很多個、分享直接下載），也會自動補上標題、縮圖和畫質']],
-  ['YTD_UI_V0.1.16', ['有新版本會主動提醒：開 App、回到 App、每 30 分鐘各檢查一次，下載頁上方會出現「有新版本」', '下載速度和剩餘時間改成平均值（看最近 12 秒），每秒更新一次，不再亂跳', '下載完成會顯示總共花了多久']],
-  ['YTD_UI_V0.1.14', ['打字就能搜尋 YouTube、Bilibili、SoundCloud，點結果直接解析', '在 App 裡登入網站（Bilibili、IG、FB、X、TikTok…），下載需要登入的內容', '從電腦匯入 cookies.txt（YouTube 登入用）', '選存檔資料夾（可以存到 SD 卡）', '只下載一段、依章節切成多個檔、只抓封面圖、跳過贊助片段', '只用 Wi-Fi、加速下載、限速、代理、自訂參數', '分享進來直接下載、完成震動、長按圖示「貼上下載」', 'App 關掉也繼續下載，重開會接回', 'App 內就能更新外殼 APK；設定和紀錄可以匯出、還原', '紀錄可以刪掉檔案本身']],
-  ['YTD_V0.1.06（外殼）', ['下載引擎跟畫面分開，App 關掉也繼續', '登入／瀏覽頁、自選資料夾、APK 自我更新、aria2 加速、萬用指令接口、捷徑、刪檔、網路與權限狀態', '之後大部分新功能都能用畫面更新包加，不用再開電腦']],
-  ['YTD_UI_V0.1.13', ['YouTube 解題程式自動從 GitHub 補齊；解析拿不到格式也先顯示標題縮圖']],
-  ['YTD_V0.1.05（外殼）', ['下載核心函式庫 0.18.1，內建 QuickJS 引擎（YouTube 一定要有）']],
-  ['YTD_UI_V0.1.03～0.1.12', ['黑白新外觀、自動解析、依實際解析度選畫質、15 個平台、佇列、開啟分享、通知、剪貼簿偵測、播放清單、字幕、封面、紀錄搜尋、設定整理、中文錯誤訊息']],
-  ['YTD_V0.1.04（外殼）', ['圖示換成 #41']],
+  ['更早（0.1.03～0.1.55）', ['下載核心、15 個平台、佇列、IG／TikTok／Telegram 帳號下載、內建播放器（拖曳預覽、速度、A-B、逐格）、紀錄、小窗分屏、自動更新、備份']],
 ];
 
 // ---------- 平台（只用簡稱標籤，不用各家商標）
@@ -224,14 +176,12 @@ function friendly(m, site) {
   if (/TG_NOMEDIA/.test(m)) return '這則 Telegram 訊息裡沒有影片或照片。';
   if (/TG_NODL/.test(m)) return '這個頻道不允許下載（頻道開了內容保護）。';
   if (/TG_ERR/.test(m)) return 'Telegram 回報錯誤：' + m.replace(/^.*TG_ERR\s*/, '').slice(0, 120);
-  if (site === 'Telegram' && /沒有產生檔案|No video formats|Unsupported URL|No media/i.test(m)) return has('tgJob') ? '這支影片太大，Telegram 網頁版沒有提供。到「平台」→ Telegram 登入你的帳號，就能下載。' : '這支影片太大，Telegram 網頁版沒有提供。要更新外殼到 V0.1.09 以上，登入 Telegram 帳號才能下載。';
-  if (/IG_SHELL/.test(m)) return 'IG 的照片和帳號瀏覽要外殼 YTD_V0.1.07 以上，請先更新外殼。';
+  if (site === 'Telegram' && /沒有產生檔案|No video formats|Unsupported URL|No media/i.test(m)) return '這支影片太大，Telegram 網頁版沒有提供。到「平台」→ Telegram 登入你的帳號，就能下載。';
   if (/IG_URL/.test(m)) return '看不懂這個 IG 網址。請用貼文、Reels、限時動態或個人頁的連結。';
   if (/IG_NOUSER/.test(m)) return '找不到這個 IG 帳號，確認帳號名稱有沒有打對。';
   if (/IG_(NONE|HTTP)/.test(m)) return 'IG 沒有回傳內容（可能是私人帳號、貼文被刪，或登入過期要重新登入）。' + (igDet ? `（IG 回應 ${igDet}）` : '');
   if (site === 'YouTube' && /Requested format is not available|Only images are available|n challenge|JavaScript runtime/i.test(m)) {
-    const c = jcall('coreState') || {};
-    return c.js ? 'YouTube 沒給影片格式。先到 設定 → 更新下載核心（可換測試版），再試一次。' : 'YouTube 要 JavaScript 引擎才下載得了，請裝外殼 YTD_V0.1.05 以上的 APK。';
+    return 'YouTube 沒給影片格式。先到「更新」→ 更新下載核心（可換測試版），再試一次。';
   }
   const parts = m.split(/(?=WARNING:|ERROR:)/).map(s => s.trim()).filter(Boolean);
   const errs = parts.filter(s => s.startsWith('ERROR:'));
@@ -304,7 +254,6 @@ function currentUrls() { return [...new Set(urlsIn(urlBox.value))]; }
 
 function onInput() {
   const L = currentUrls(), text = urlBox.value.trim();
-  collectUi();
   const searching = !L.length && text.length > 1;
   $('#searchBox').hidden = !searching;
   $('#dlOpts').hidden = searching || !L.length;
@@ -368,7 +317,6 @@ $('#bSearch').onclick = () => doSearch();
 function doSearch() {
   const q = urlBox.value.trim(); if (q.length < 2) return;
   if ((S.src || 'ytsearch') === 'iguser') { igSearch(q); return; }
-  if (!newShell()) { $('#results').innerHTML = '<p class="empty">搜尋要外殼 YTD_V0.1.06 以上的 APK。</p>'; return; }
   $('#results').innerHTML = '<div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div>';
   const src = S.src || 'ytsearch';
   const id = req('s', r => {
@@ -401,7 +349,6 @@ window.onExec = s => { const r = JSON.parse(s); settle(r.id, r); };
 // ---- 逛網站
 $('#bBrowse').onclick = () => {
   const row = $('#browseRow'); row.hidden = !row.hidden; if (row.hidden) return;
-  if (!has('browse')) { row.innerHTML = '<span class="mut small">逛網站要外殼 YTD_V0.1.06 以上的 APK。</span>'; return; }
   row.innerHTML = SITES.slice(0, 10).map(s => `<button class="chip" type="button" data-h="${esc(s.home)}">${esc(s.k)}</button>`).join('');
   row.querySelectorAll('.chip').forEach(b => b.onclick = () => { row.hidden = true; N.browse(b.dataset.h, 'browse', '', ''); });
 };
@@ -426,8 +373,7 @@ function probe(u, k) {
     return;
   }
   if (!has('probe')) { info = null; drawPreview(); return; }
-  if (newShell()) N.probe(probeId, u, probeSpec(u, k));
-  else N.probe(probeId, u, JSON.stringify([...(triesFor(u)[k] || []), ['--ignore-no-formats-error']]));
+  N.probe(probeId, u, probeSpec(u, k));
 }
 window.onInfo = s => {
   const p = JSON.parse(s);
@@ -501,14 +447,12 @@ $('#bGo').onclick = () => {
   if (S.notify && !LS('askedNotify')) { call('askNotify'); LS('askedNotify', 1); }
   const grp = L.length > 1 ? newGrp() : '';                                 // 一次按下載的多個網址＝一組，紀錄裡合成一筆
   L.forEach(u => enqueue(u, sel.q, L.length === 1 ? info : null, { section, sponsor: sel.sponsor, chapters: sel.chapters, grp, grpN: L.length }));
-  collectN = 0; call('collectReset');
   urlBox.value = ''; info = null; probeUrl = ''; $('#secFrom').value = ''; $('#secTo').value = ''; sel.chapters = false; sel.sponsor = S.sponsor;
   onInput();
   toast(L.length > 1 ? `已加入 ${L.length} 個` : '已加入下載');
 };
 
 // ---- 剪貼簿、分享、捷徑
-let clipU = '';
 // 同一支影片的不同寫法（多了 ?si=、?igsh= 之類的尾巴）要當成同一個
 function urlKey(u) {
   try {
@@ -534,17 +478,7 @@ function markDone(u) { const k = urlKey(u), L = doneKeys().filter(x => x !== k);
 const isDone = u => doneKeys().includes(urlKey(u)) || u === LS('lastClip');
 // 剪貼簿只收支援的網站（避免複製到文章、別的連結就去解析）
 const goodUrl = u => siteOf(u) !== OTHER;
-let clipDup = false;
-function askClip(u, dup) {
-  clipU = u; clipDup = dup;
-  $('#clipLbl').textContent = dup ? '這個下載過了，要再下載一次嗎？' : '剪貼簿有網址';
-  $('#clipAdd').textContent = dup ? '再下載' : '加入'; $('#clipNo').textContent = dup ? '不用' : '忽略';
-  $('#clipUrl').textContent = u; $('#clipBar').hidden = false;
-}
-function autoGo(u) { markDone(u); $('#clipBar').hidden = true; page('dl'); enqueue(u, S.quality, null, { sponsor: S.sponsor }); }
-// 📋 連續收集：開著時，每次回到 App（小窗點一下也算）剪貼簿裡的新網址會自動加到下面，收完按一次下載＝一組
-let collectN = 0;
-function collectUi() { return; const b = $('#bCollect'); if (!b) return; const on = !!LS('collect'); b.classList.toggle('primary', on); b.classList.toggle('ghost', !on); b.textContent = on ? `📋 連續收集中${currentUrls().length ? '（' + currentUrls().length + '）' : ''}` : '📋 連續收集'; }
+function autoGo(u) { markDone(u); page('dl'); enqueue(u, S.quality, null, { sponsor: S.sponsor }); }
 function checkClip() {
   if (!has('paste') || (!S.clip && !S.autoDl)) return;
   const u = urlsIn(N.paste()).find(goodUrl); if (!u) return;               // 不是支援的網站（文章、其他連結）：不理它
@@ -558,21 +492,10 @@ function checkClip() {
 // 回到 App 時，系統可能還沒把剪貼簿交給我們，所以分幾次讀
 let clipTimers = [];
 function clipSoon() { clipTimers.forEach(clearTimeout); clipTimers = [300, 900, 1800, 3000].map(ms => setTimeout(checkClip, ms)); }
-window.onResume = () => { clipSoon(); takeCollected(); refreshEnv(); pump(); autoCheck(false); };
+window.onResume = () => { clipSoon(); refreshEnv(); pump(); autoCheck(false); };
 window.addEventListener('focus', clipSoon);
-window.onFocusWin = () => { clipSoon(); takeCollected(); };
-// 分享選單「收集到 YT Download」收進來的網址（外殼 V0.1.15）：畫面開著馬上加進來，沒開就等打開時
-function takeCollected() {
-  return;                                                                   // 0.1.63 拿掉「收集」，分享就直接下載
-  if (!has('takeCollected')) return; const L = jcall('takeCollected') || []; if (!L.length) return;
-  page('dl'); const before = currentUrls().length; addUrls(L.join('\n'), true);
-  const n = currentUrls().length; if (n > before) { bpShow('ok', `＋${n - before}　共 ${n} 個`, '從分享收集進來的', 0); grabFx(n - before, `共 ${n} 個`); }
-}
-window.onCollected = () => setTimeout(takeCollected, 50);
-setTimeout(takeCollected, 800);                                       // 外殼 V0.1.13：小窗被點到（拿到焦點）時
+window.onFocusWin = clipSoon;
 document.addEventListener('visibilitychange', () => { if (!document.hidden) clipSoon(); });
-$('#clipAdd').onclick = () => { if (clipDup) { autoGo(clipU); toast('再下載一次'); return; } LS('lastClip', clipU); $('#clipBar').hidden = true; page('dl'); addUrls(clipU); };
-$('#clipNo').onclick = () => { LS('lastClip', clipU); $('#clipBar').hidden = true; };
 // 分享選單「YT Download」（外殼 V0.1.16）：畫面不跳過來，直接開始下載（不管有沒有開「自動下載」）
 window.onShareBg = (t, inApp) => {
   const all = [...new Set(urlsIn(t))], L = all.filter(goodUrl).length ? all.filter(goodUrl) : all.slice(0, 1);   // 有支援的網站就只抓那些；都不是就試第一個
@@ -631,7 +554,7 @@ function enqueue(url, q, inf, x) {
   j.uploader = inf && inf.ok ? (inf.uploader || '') : ''; j.uid = (inf && (inf.uid || (inf.ig && inf.ig.uid))) || ''; j.igData = (inf && inf.ig) || null; j.bulk = !!x.bulk; j.grp = x.grp || ''; j.grpN = x.grpN || 0;
   if (inf && inf.ok && inf.heights && inf.heights.length) j.res = resFor(q, inf.heights[0]);
   Q.unshift(j); drawCard(j); pump(); saveQ();
-  if (!(inf && inf.ok) && newShell() && q !== 'thumb' && st.k !== 'Instagram' && !(st.k === 'Telegram' && tgReady())) N.probe('qi:' + j.id, url, probeSpec(url, 0));
+  if (!(inf && inf.ok) && has('probe') && q !== 'thumb' && st.k !== 'Instagram' && !(st.k === 'Telegram' && tgReady())) N.probe('qi:' + j.id, url, probeSpec(url, 0));
 }
 const running = () => Q.filter(j => j.state === 'run').length;
 let netWait = false;
@@ -762,7 +685,6 @@ function startJob(j) {
     dest: S.dest && S.dest.uri ? S.dest.uri : '', gallery: S.gallery === 'off' ? '' : S.gallery, cookies: cookieOk(st.ck) ? st.ck : '', aria2: !!(S.aria && !j.section && !j.chapters) };
   drawCard(j); saveQ();
   if (has('job')) N.job(JSON.stringify(spec));
-  else if (has('downloadEx')) N.downloadEx(j.pid, j.url, spec.mode, JSON.stringify(spec.args));
   else setTimeout(() => window.onDone(JSON.stringify({ id: j.pid, ok: false, msg: '要在 App 裡才能下載' })), 300);
 }
 const byPid = pid => Q.find(j => j.pid === pid);
@@ -822,21 +744,6 @@ function stText(j) {
   if (j.state === 'wait') { const r = Math.round((igNext - Date.now()) / 1000); return netWait ? '等 Wi-Fi（設定裡開了只用 Wi-Fi）' : (j.site === 'Instagram' && S.igSlow && r > 6) ? `休息中，約 ${r >= 60 ? Math.ceil(r / 60) + ' 分鐘' : r + ' 秒'}後繼續（慢慢抓，避免被 IG 擋）` : '等前面的下載完'; }
   if (j.state === 'ok') return '已存到 ' + (j.files[0] ? j.files[0].path : '') + (j.files.length > 1 ? `（共 ${j.files.length} 個檔）` : '') + (j.took ? ' · 花了 ' + fmtEta(j.took) : '');
   return j.msg;
-}
-function cardHTML(j) {
-  const stateTxt = { wait: netWait ? '等 Wi-Fi' : '排隊中', run: '下載中', ok: '完成', bad: '失敗', cancel: '已取消' }[j.state];
-  const stateCls = { run: 'run', ok: 'ok', bad: 'bad' }[j.state] || '';
-  let acts = '';
-  if (j.state === 'run' || j.state === 'wait') acts = `<button class="btn ghost" data-a="cancel" type="button">取消</button>`;
-  else if (j.state === 'ok') acts = `<button class="btn" data-a="open" type="button">播放</button><button class="btn ghost" data-a="share" type="button">分享</button><button class="btn ghost" data-a="x" type="button">移除</button>`;
-  else acts = `<button class="btn" data-a="retry" type="button">重試</button>${j.state === 'bad' ? '<button class="btn ghost" data-a="detail" type="button">詳細</button>' : ''}<button class="btn ghost" data-a="x" type="button">移除</button>`;
-  const tags = [qShow(j.q, j.res), j.playlist ? '清單' : '', j.section ? '片段' : '', j.chapters ? '章節' : '', j.sponsor ? '跳贊助' : '', j.hdSrc ? '高畫質來源' : ''].filter(Boolean);
-  return `${thumbImg(j.thumb)}<div class="cb">
-    <div class="ct">${esc(j.title || j.url)}</div>
-    <div class="cm"><span class="badge">${esc(j.ab)}</span><span class="state ${stateCls}">${stateTxt}</span>${tags.map(t => `<span>${esc(t)}</span>`).join('')}</div>
-    <div class="bar"><i style="width:${j.state === 'run' ? Math.max(2, j.pct || 0) : 100}%"></i></div>
-    <div class="st">${esc(stText(j))}</div>
-    <div class="acts">${acts}</div></div>`;
 }
 function drawCard(j) { drawStage(); drawQueue(); counts(); }
 
@@ -1161,14 +1068,7 @@ function act(j, a) {
   else if (a === 'detail') toast(String(j.raw || j.msg).slice(-300), 7000);
   else if (a === 'x') { const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); drawStage(); counts(); saveQ(); }
 }
-$('#bClearDone').onclick = () => { [...Q].forEach(j => { if (['ok', 'bad', 'cancel'].includes(j.state)) act(j, 'x'); }); };
-function counts() {
-  const active = Q.filter(j => j.state === 'run' || j.state === 'wait').length;
-  $('#qCount').textContent = Q.length ? `${running()} 個在跑 · ${Q.filter(j => j.state === 'wait').length} 個排隊` : '';
-  $('#qEmpty').hidden = Q.length > 0;
-  $('#bClearDone').hidden = !Q.some(j => ['ok', 'bad', 'cancel'].includes(j.state));
-  const b = $('#tabBadge'); b.hidden = !active; b.textContent = active;
-}
+function counts() { const n = Q.filter(j => j.state === 'run' || j.state === 'wait').length, b = $('#tabBadge'); b.hidden = !n; b.textContent = n; }
 
 // 開啟時接回：存起來的佇列 + 引擎還在跑的工作 + 畫面不在時錯過的結果
 function restore() {
@@ -1442,7 +1342,7 @@ function drawVer() {
   $('#verAll').innerHTML = `外殼 ${esc(sh)}<br>畫面 ${esc(ui)}<br>下載核心 ${esc(core || '—')}${env.model ? `<br>手機 ${esc(env.model)}（Android SDK ${env.sdk}）` : ''}`;
   $('#log').innerHTML = CHANGELOG.map(c2 => `<div><b>${esc(c2[0])}</b><ul>${c2[1].map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
 }
-$('#bCore').onclick = () => { if (!has('updateCore')) return; $('#coreMsg').textContent = '更新中，可能要一兩分鐘…'; $('#bCore').disabled = true; if (has('updateCoreCh')) N.updateCoreCh(S.channel); else N.updateCore(); };
+$('#bCore').onclick = () => { if (!has('updateCoreCh')) return; $('#coreMsg').textContent = '更新中，可能要一兩分鐘…'; $('#bCore').disabled = true; call('updateCoreCh', S.channel); };
 window.onCore = m => { $('#coreMsg').textContent = m; $('#bCore').disabled = false; LS('coreAt', Date.now()); drawVer(); if (/已更新/.test(m)) toast('下載核心' + m); };
 
 // ---- App 更新：update.json = {ver, zip, shell, apk}
@@ -1628,8 +1528,6 @@ document.addEventListener('seeked', e => {
 // =====================================================================
 const P = { list: [], i: 0, title: '', rate: Math.min(4, Math.max(0.25, +LS('prate') || 1)), uiT: 0, land: false, a: null, b: null };
 const pEl = $('#player'), pv = $('#pv'), pim = $('#pi');
-// 畫面正中間不放任何按鈕（不要擋到影片）：播放／暫停鈕搬到下面的控制列，上一個／下一個用左右滑
-$('#pBot').insertBefore($('#pPlay'), $('#pCur'));
 pim.draggable = false; pim.addEventListener('dragstart', e => e.preventDefault());   // 照片不能被「拖走」，不然上下滑會被打斷
 function mimeGuess(n) { const e = (String(n || '').split('.').pop() || '').toLowerCase(); return ({ mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', mov: 'video/quicktime', m4a: 'audio/mp4', mp3: 'audio/mpeg', opus: 'audio/ogg', ogg: 'audio/ogg', flac: 'audio/flac', wav: 'audio/wav', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic' })[e] || ''; }
 const mimeOf = f => (f && (f.mime && f.mime !== 'application/octet-stream' ? f.mime : mimeGuess(f.name))) || '';
@@ -1645,18 +1543,17 @@ function pPos(save) { const f = P.list[P.i]; if (!f || pv.hidden) return 0; cons
   if (isFinite(pv.duration) && pv.duration > 60) { if (pv.currentTime > 5 && pv.currentTime < pv.duration - 10) M[f.uri] = Math.floor(pv.currentTime); else delete M[f.uri]; const K = Object.keys(M); if (K.length > 300) delete M[K[0]]; LS('pos', M); } return 0; }
 function pLoad() {
   const f = P.list[P.i], img = mimeOf(f).startsWith('image/');
-  markW(f.uri); $('#pNav').hidden = !P.hctx || !jog.on; pEl.classList.toggle('hasnav', !!P.hctx && jog.on);
+  markW(f.uri);
   $('#pErr').hidden = true; $('#pSeek').hidden = true;
   $('#pTitle').textContent = (P.list.length > 1 ? `${P.i + 1}/${P.list.length}　` : '') + (P.title || f.name || '');
-  $('#pPrev').hidden = $('#pNext').hidden = P.list.length < 2;
   pim.hidden = !img; pv.hidden = img; $('#pBot').hidden = img; $('#pPlay').hidden = img;
   if (has('fileExists') && !N.fileExists(f.uri)) { pFail('檔案已經被刪除或搬走了'); return; }
-  if (img) { $('#pJog').hidden = true; pv.pause(); pv.removeAttribute('src'); pv.load(); pim.src = f.uri; call('orient', 'auto'); pUi(true); }
-  else { P.a = P.b = null; pAbUi(); setTimeout(jogShow, 0); $('#pRateBox').hidden = true; pim.removeAttribute('src'); $('#pBar').value = 0; $('#pCur').textContent = '0:00'; $('#pDur').textContent = ''; pv.src = f.uri; pv.playbackRate = P.rate; const p = pv.play(); if (p && p.catch) p.catch(() => {}); pUi(); }
+  if (img) { pv.pause(); pv.removeAttribute('src'); pv.load(); pim.src = f.uri; call('orient', 'auto'); pUi(true); }
+  else { P.a = P.b = null; pAbUi(); $('#pRateBox').hidden = true; pim.removeAttribute('src'); $('#pBar').value = 0; $('#pCur').textContent = '0:00'; $('#pDur').textContent = ''; pv.src = f.uri; pv.playbackRate = P.rate; const p = pv.play(); if (p && p.catch) p.catch(() => {}); pUi(); }
 }
 function pFail(msg) { $('#pErrMsg').textContent = msg; $('#pErr').hidden = false; pUi(true); }
 function pStep(d) { if (P.list.length < 2) return; pPos(true); P.i = (P.i + d + P.list.length) % P.list.length; pLoad(); }
-function pClose() { $('#pRateBox').hidden = true; jogEl.hidden = true; pPos(true); pv.pause(); pv.removeAttribute('src'); pv.load(); pim.removeAttribute('src'); pEl.hidden = true; if ($('#igPane').hidden) document.body.classList.remove('locked'); call('orient', 'auto'); call('keepOn', false); call('immersive', false); if (!$('#p_hist').classList.contains('on')) return; drawHist(); }
+function pClose() { $('#pRateBox').hidden = true; pPos(true); pv.pause(); pv.removeAttribute('src'); pv.load(); pim.removeAttribute('src'); pEl.hidden = true; if ($('#igPane').hidden) document.body.classList.remove('locked'); call('orient', 'auto'); call('keepOn', false); call('immersive', false); if (!$('#p_hist').classList.contains('on')) return; drawHist(); }
 function pUi(sticky) { pEl.classList.add('ui'); clearTimeout(P.uiT); if (!sticky && !pv.hidden && !pv.paused) P.uiT = setTimeout(() => pEl.classList.remove('ui'), 3000); }
 function pToggle() { if (pv.paused) { const p = pv.play(); if (p && p.catch) p.catch(() => {}); } else pv.pause(); }
 function pJump(d) { if (!isFinite(pv.duration)) return; pv.currentTime = Math.min(pv.duration, Math.max(0, pv.currentTime + d)); pHint(pv.currentTime, d); setTimeout(() => { if (!gs) $('#pSeek').hidden = true; }, 600); }
@@ -1678,8 +1575,6 @@ pim.addEventListener('error', () => { if (pim.getAttribute('src')) pFail('這張
 $('#pBar').addEventListener('input', () => { if (isFinite(pv.duration)) { const t = $('#pBar').value / 1000 * pv.duration; scrubStart(pv); scrubTo(pv, t); $('#pCur').textContent = fmtDur(t) || '0:00'; pUi(true); } });
 $('#pBar').addEventListener('change', () => { if (isFinite(pv.duration)) { scrubEnd(pv, $('#pBar').value / 1000 * pv.duration); pUi(); } });
 $('#pPlay').onclick = () => pToggle();
-$('#pPrev').onclick = () => pStep(-1);
-$('#pNext').onclick = () => pStep(1);
 $('#pClose').onclick = () => pClose();
 // ---- 速度：－／＋ 每次 0.1，或直接點常用的；記住下次用
 function pRateSet(r) {
@@ -1705,53 +1600,6 @@ $('#pAB').onclick = () => {
 };
 $('#pLoop').onclick = () => { pv.loop = !pv.loop; LS('ploop', pv.loop); $('#pLoop').classList.toggle('on', pv.loop); toast(pv.loop ? '這部會一直重複播' : '不重複'); pUi(); };
 $('#pFit').onclick = () => { const on = !pEl.classList.contains('fill'); pEl.classList.toggle('fill', on); LS('pfill', on); $('#pFit').classList.toggle('on', on); toast(on ? '填滿畫面（邊邊會切掉）' : '完整顯示'); pUi(); };
-// ---- 🎛 轉盤：左下角四分之一圓的隱形觸控區（不畫東西、不擋畫面），拇指順時針轉＝快轉、逆時針＝倒轉。轉慢＝一點一點細調，轉快＝跳很遠
-//      手壓著畫面跟著走，放開從那裡播（跟在畫面上左右滑一樣）。平板預設開、手機預設關，🎛 切換（會記住）
-const jog = { on: LS('pjog2') == null ? false : !!LS('pjog2'), g: null, ang: 0, last: 0, tick: 0 };
-const jogEl = $('#pJog');
-function jogShow() {
-  const show = jog.on && !pEl.hidden && !pv.hidden;
-  jogEl.hidden = !show; pEl.classList.toggle('hasjog', show); $('#pJogBtn').classList.toggle('on', jog.on);
-  if (show) {                                                           // 扁的橢圓：貼著底邊往右延伸（像唱盤的八分之一）
-    const R = Math.max(160, Math.min(360, Math.min(pEl.clientWidth, pEl.clientHeight) * 0.46));
-    pEl.style.setProperty('--jogW', Math.round(Math.min(pEl.clientWidth * 0.65, R * 1.6)) + 'px');
-    pEl.style.setProperty('--jogH', Math.round(R * 0.62) + 'px');
-  }
-}
-$('#pJogBtn').onclick = () => { jog.on = !jog.on; LS('pjog2', jog.on); $('#pNav').hidden = !P.hctx || !jog.on; pEl.classList.toggle('hasnav', !!P.hctx && jog.on); jogShow(); toast(jog.on ? '左手按鈕開了：左下角轉盤＋上一則／下一則' : '左手按鈕收起來了（上下滑一樣可以換）'); pUi(); };
-addEventListener('resize', () => { if (!pEl.hidden) jogShow(); });
-const jogAngle = (g, e) => Math.atan2((g.cy - e.clientY) / g.h, (e.clientX - g.cx) / g.w);   // 照橢圓的比例算角度
-jogEl.addEventListener('pointerdown', e => {
-  e.stopPropagation(); if (!isFinite(pv.duration)) return;
-  const r = pEl.getBoundingClientRect();
-  const jr = jogEl.getBoundingClientRect();
-  const g = jog.g = { cx: r.left, cy: r.bottom, w: Math.max(1, jr.width), h: Math.max(1, jr.height), t: performance.now(), base: pv.currentTime || 0, tgt: pv.currentTime || 0 };
-  g.a = jogAngle(g, e);
-  scrubStart(pv); call('vibrate', 12);
-  try { jogEl.setPointerCapture(e.pointerId); } catch (x) {}
-});
-jogEl.addEventListener('pointermove', e => {
-  e.stopPropagation(); const g = jog.g; if (!g) return;
-  const a = jogAngle(g, e), now = performance.now();
-  let d = a - g.a; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
-  g.a = a; const deg = -d * 180 / Math.PI, dt = Math.max(now - g.t, 1); g.t = now;     // 順時針（角度變小）＝正＝快轉
-  const sp = Math.abs(deg) / dt;                                                        // 轉速（度／毫秒）
-  const maxGain = Math.min(8, Math.max(0.2, pv.duration / 150)), k = Math.min(1, Math.max(0, (sp - 0.04) / 0.6));
-  const gain = 0.06 + (maxGain - 0.06) * k * k;                                         // 每轉一度跳幾秒：慢＝很細，快＝很多
-  g.tgt = Math.min(pv.duration, Math.max(0, g.tgt + deg * gain));
-  jog.tick += Math.abs(deg); if (jog.tick >= 12) { jog.tick = 0; call('vibrate', 10); }    // 每轉一小格震一下，像唱盤的刻度
-  pHint(g.tgt, g.tgt - g.base);
-  $('#pBar').value = Math.round(g.tgt / pv.duration * 1000); $('#pCur').textContent = fmtDur(g.tgt) || '0:00';
-  scrubTo(pv, g.tgt);
-});
-const jogEnd = e => {
-  e.stopPropagation(); const g = jog.g; jog.g = null; if (!g) return;
-  $('#pSeek').hidden = true;
-  scrubEnd(pv, g.tgt);
-};
-jogEl.addEventListener('pointerup', jogEnd);
-jogEl.addEventListener('pointercancel', jogEnd);
-// ---- 左邊邊緣：上半＝較新的一則、下半＝較舊的一則（照紀錄頁的順序）。只畫兩條細白線，觸控區大約 3 公分寬
 function pNavHint(t) { const el = $('#pSeek'); el.hidden = false; el.innerHTML = `<b style="font-size:16px">${esc(t)}</b>`; clearTimeout(P.navT); P.navT = setTimeout(() => { if (!gs) el.hidden = true; }, 1400); }
 // 上下滑換一則：從紀錄打開的照紀錄順序換；不然多個檔就換檔；單一個檔往下滑＝關掉
 function pVert(d) {
@@ -1781,9 +1629,6 @@ function histStep(d) {
   pLoad(); pNavHint((d < 0 ? '▲ 上一則：' : '▼ 下一則：') + (h.title || '')); call('vibrate', 20);
   return true;
 }
-['pointerdown', 'pointerup'].forEach(ev => $('#pNav').addEventListener(ev, e => e.stopPropagation()));
-$('#pNavUp').onclick = e => { e.stopPropagation(); histStep(-1); };
-$('#pNavDn').onclick = e => { e.stopPropagation(); histStep(1); };
 pv.loop = !!LS('ploop'); $('#pLoop').classList.toggle('on', pv.loop);
 if (LS('pfill')) { pEl.classList.add('fill'); $('#pFit').classList.add('on'); }
 $('#pRot').onclick = () => { P.land = !P.land; call('orient', P.land ? 'land' : 'port'); pUi(); };
@@ -1860,7 +1705,7 @@ function infoLine() {
   $('#dlInfo').textContent = parts.join(' · ');
   const b = $('#banner'), c = jcall('coreState');
   if (c && c.js === false) { b.hidden = false; b.textContent = '這版 APK 沒有 JavaScript 引擎，YouTube 會失敗。請裝新的外殼。'; }
-  else if (N && !newShell()) { b.hidden = false; b.textContent = '目前外殼比較舊，搜尋、登入、選資料夾等功能要裝外殼 YTD_V0.1.06 才能用。'; }
+  else if (N && !has('sweep')) { b.hidden = false; b.textContent = '外殼比較舊，到「更新」分頁按「安裝新外殼」。'; }
   else b.hidden = true;
 }
 applyTheme(); refreshEnv();
@@ -1868,7 +1713,7 @@ drawQual(); drawPreview(); counts(); drawVer(); drawStage();
 $('#dlOpts').hidden = !currentUrls().length;
 restore(); drawStage(); infoLine(); pump();
 { const p = LS('page'); if (p && PAGES.includes(p) && p !== 'dl') page(p); }
-setTimeout(() => { if (S.autoCore && has('updateCore') && Date.now() - (LS('coreAt') || 0) > 20 * 3600e3) { $('#coreMsg').textContent = '自動更新中…'; if (has('updateCoreCh')) N.updateCoreCh(S.channel); else N.updateCore(); } }, 1500);
+setTimeout(() => { if (S.autoCore && has('updateCoreCh') && Date.now() - (LS('coreAt') || 0) > 20 * 3600e3) { $('#coreMsg').textContent = '自動更新中…'; call('updateCoreCh', S.channel); } }, 1500);
 clipSoon();
 setTimeout(() => autoCheck(true), 3000);
 

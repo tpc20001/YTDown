@@ -49,23 +49,6 @@ object Net {
         } finally { c.disconnect() }
     }
 
-    /** 只問檔案多大、是什麼類型（不下載）。伺服器不給 HEAD 就改抓第一個位元組來問。 */
-    fun head(url: String, headers: JSONObject?, cookies: String): JSONObject {
-        var c = open(url, "HEAD", headers, cookies, null)
-        try {
-            var code = c.responseCode; var len = c.contentLengthLong; var type = c.contentType ?: ""
-            if (code !in 200..299 || len <= 0) {
-                c.disconnect()
-                val h = JSONObject(headers?.toString() ?: "{}").put("Range", "bytes=0-0")
-                c = open(url, "GET", h, cookies, null)
-                code = c.responseCode; type = c.contentType ?: type
-                val cr = c.getHeaderField("Content-Range") ?: ""
-                len = cr.substringAfterLast('/', "").toLongOrNull() ?: (if (code == 200) c.contentLengthLong else -1L)
-            }
-            return JSONObject().put("ok", code in 200..299).put("status", code).put("len", len).put("type", type).put("url", c.url.toString())
-        } finally { c.disconnect() }
-    }
-
     /** 邊下載邊寫檔（不佔記憶體）。alive 回 false 就中斷。 */
     fun download(url: String, headers: JSONObject?, cookies: String, out: File, alive: () -> Boolean, onProg: (Long, Long) -> Unit) {
         val c = open(url, "GET", headers, cookies, null)

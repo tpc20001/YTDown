@@ -22,11 +22,6 @@
       <button class="btn sm primary" id="updGo" type="button">更新</button>
       <button class="btn sm ghost" id="updLater" type="button">稍後</button>
     </div>
-    <div id="clipBar" class="clip" hidden>
-      <div class="clip-t"><span class="mut small" id="clipLbl">剪貼簿有網址</span><span id="clipUrl" class="clip-u"></span></div>
-      <button class="btn sm" id="clipAdd" type="button">加入</button>
-      <button class="btn sm ghost" id="clipNo" type="button">忽略</button>
-    </div>
 
     <div class="panel">
       <button class="big-paste" id="bPaste" type="button"><span class="bp-main">📋 貼上</span><span class="bp-sub" id="bpSub">（點一下畫面也會自動讀）</span></button>
@@ -70,7 +65,6 @@
     <div id="stageInfo" class="stage-info"></div>
     <p id="stageMore" class="mut small center"></p>
     <div id="qList" class="qlist" hidden></div>
-    <div class="legacy" hidden><span id="qCount"></span><button id="bClearDone" type="button"></button><div id="queue"></div><p id="qEmpty"></p></div>
     <p id="dlInfo" class="mut small center"></p>
   </section>
 
@@ -209,16 +203,13 @@
   <div id="pSeek" class="p-seek" hidden></div>
   <div id="pErr" class="p-err" hidden><span id="pErrMsg"></span><button class="btn" id="pErrBtn" type="button">用其他 App 開</button></div>
   <div class="p-top"><button id="pClose" type="button" aria-label="關閉">✕</button><span id="pTitle"></span><button id="pExt" type="button">其他 App</button></div>
-  <div class="p-mid"><button id="pPrev" type="button" aria-label="上一個">‹</button><button id="pPlay" type="button" aria-label="播放或暫停">▶</button><button id="pNext" type="button" aria-label="下一個">›</button></div>
-  <div class="p-jog" id="pJog" hidden></div>
-  <div class="p-nav" id="pNav" hidden><button id="pNavUp" type="button" aria-label="較新的一則"></button><button id="pNavDn" type="button" aria-label="較舊的一則"></button></div>
   <div class="p-rate" id="pRateBox" hidden>
     <div class="p-rate-row"><button type="button" data-rs="-0.1" aria-label="慢一點">－</button><b id="pRateVal">1.0x</b><button type="button" data-rs="0.1" aria-label="快一點">＋</button></div>
     <div class="p-rate-row"><button type="button" data-rv="0.5">0.5</button><button type="button" data-rv="1">1</button><button type="button" data-rv="1.25">1.25</button><button type="button" data-rv="1.5">1.5</button><button type="button" data-rv="2">2</button></div>
   </div>
   <div class="p-bot" id="pBot">
-    <div class="p-tools"><button id="pFrB" type="button" aria-label="上一格">◀▮</button><button id="pFrF" type="button" aria-label="下一格">▮▶</button><button id="pAB" type="button">A-B</button><button id="pLoop" type="button" aria-label="重複播放">🔁</button><button id="pFit" type="button" aria-label="填滿畫面">⛶</button><button id="pJogBtn" type="button" aria-label="轉盤">🎛</button></div>
-    <span id="pCur">0:00</span><input type="range" id="pBar" min="0" max="1000" value="0" aria-label="播放進度"><span id="pDur"></span><button id="pRate" type="button">1x</button><button id="pRot" type="button" aria-label="轉向">⟳</button>
+    <div class="p-tools"><button id="pFrB" type="button" aria-label="上一格">◀▮</button><button id="pFrF" type="button" aria-label="下一格">▮▶</button><button id="pAB" type="button">A-B</button><button id="pLoop" type="button" aria-label="重複播放">🔁</button><button id="pFit" type="button" aria-label="填滿畫面">⛶</button></div>
+    <button id="pPlay" type="button" aria-label="播放或暫停">▶</button><span id="pCur">0:00</span><input type="range" id="pBar" min="0" max="1000" value="0" aria-label="播放進度"><span id="pDur"></span><button id="pRate" type="button">1x</button><button id="pRot" type="button" aria-label="轉向">⟳</button>
   </div>
 </div>
 <div id="toast" class="toast" hidden></div>
