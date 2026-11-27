@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.73';
+const UI_VER = 'YTD_UI_V0.1.74';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.74', ['再清掉一批舊外殼才需要的檢查和提示文字，程式更短']],
   ['YTD_V0.1.23（外殼）／YTD_UI_V0.1.73', ['完成通知合成一則「完成 N 個、失敗 N 個」，不會一個下載一則堆滿通知欄；打開 App 就清掉', 'Telegram 下載完直接搬檔，不再多複製一次，大影片存得比較快']],
   ['YTD_V0.1.22（外殼）／YTD_UI_V0.1.72', ['修正：分享一個已經下載過的網址時，會先跳「已加入」又跳「略過」；現在只會跳一個正確的提示', 'App 內登入／逛網站頁的按鈕改成暗色']],
   ['YTD_V0.1.21（外殼）／YTD_UI_V0.1.71', ['存檔加快：下載好的檔案搬到「下載／相簿」時用大緩衝，大檔搬得比較快', '存到一半失敗不會在下載資料夾留下空檔或壞檔', '存檔程式合併整理（下載、相簿、自選資料夾共用）']],
@@ -143,7 +144,6 @@ function igCode(u) { u = String(u || ''); const m = u.match(/instagram\.com\/(?:
 function igUserOf(u) { const m = String(u || '').match(/instagram\.com\/([A-Za-z0-9._]+)\/?(?:[?#].*)?$/); return m && !IG_RES.has(m[1].toLowerCase()) ? m[1] : ''; }
 function igPk(code) { const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'; let n = 0n; for (const c of code.slice(0, code.length > 12 ? 11 : code.length)) n = n * 64n + BigInt(A.indexOf(c)); return n.toString(); }
 async function igGet(path) {
-  if (!has('http')) throw new Error('IG_SHELL');
   const c = jcall('cookieInfo', 'instagram'); if (!c || !c.has) throw new Error('IG_LOGIN');
   const r = await httpReq({ url: 'https://www.instagram.com/api/v1/' + path, cookies: 'instagram', headers: IG_HDR });
   const det = t => ` [${r.status}] ${String(t || '').replace(/\s+/g, ' ').slice(0, 90)}`;
@@ -347,13 +347,12 @@ $('#results').onclick = e => { const b = e.target.closest('.res'); if (!b) retur
 async function igSearch(q) {
   q = q.replace(/^@/, '').trim(); const R = $('#results');
   const direct = `<button class="res" type="button" data-ig="${esc(q)}"><span class="res-b"><span class="res-t">直接打開 @${esc(q)}</span><span class="res-m">帳號名稱要完全一樣</span></span></button>`;
-  if (!has('http')) { R.innerHTML = `<p class="empty">${esc(friendly('IG_SHELL'))}</p>`; return; }
   R.innerHTML = '<div class="skel" style="height:56px"></div><div class="skel" style="height:56px"></div>';
   try {
     const j = await igGet('web/search/topsearch/?context=user&query=' + encodeURIComponent(q));
     const U = (j.users || []).map(x => x.user).filter(u => u && u.username);
     R.innerHTML = (U.length ? U.map(u => `<button class="res" type="button" data-ig="${esc(u.username)}" data-uid="${esc(u.pk || u.pk_id || '')}">${thumbImg(u.profile_pic_url, 'ava')}<span class="res-b"><span class="res-t">@${esc(u.username)}</span><span class="res-m">${esc([u.full_name, u.is_private ? '私人帳號' : '', u.is_verified ? '已驗證' : ''].filter(Boolean).join(' · '))}</span></span></button>`).join('') : '<p class="empty">找不到帳號</p>') + direct;
-  } catch (e) { R.innerHTML = `<p class="empty">${esc(friendly(String(e.message || e)))}</p>` + (/IG_LOGIN|IG_SHELL/.test(String(e.message)) ? '' : direct); }
+  } catch (e) { R.innerHTML = `<p class="empty">${esc(friendly(String(e.message || e)))}</p>` + (/IG_LOGIN/.test(String(e.message)) ? '' : direct); }
 }
 window.onExec = s => { const r = JSON.parse(s); settle(r.id, r); };
 
@@ -507,7 +506,7 @@ window.onResume = () => { clipSoon(); refreshEnv(); pump(); autoCheck(false); };
 window.addEventListener('focus', clipSoon);
 window.onFocusWin = clipSoon;
 document.addEventListener('visibilitychange', () => { if (!document.hidden) clipSoon(); });
-// 分享選單「YT Download」（外殼 V0.1.16）：畫面不跳過來，直接開始下載（不管有沒有開「自動下載」）
+// 分享選單「YT Download」：畫面不跳過來，直接開始下載（不管有沒有開「自動下載」）
 window.onShareBg = (t, inApp) => {
   const all = [...new Set(urlsIn(t))], L = all.filter(goodUrl).length ? all.filter(goodUrl) : all.slice(0, 1);   // 有支援的網站就只抓那些；都不是就試第一個
   const say = m => inApp ? toast(m, 2500) : call('toastTop', m);
@@ -527,7 +526,6 @@ window.onShare = t => {
 };
 // ---- 🪟 分屏：請系統把另一個 App 開在旁邊（平板大螢幕上會直接進分屏，手機分身裡也試得到）
 function splitGo(pkg, name) {
-  if (!has('splitWith')) { toast('要先更新外殼到 V0.1.14'); return; }
   LS('splitPkg', pkg); LS('splitName', name || pkg); $('#splitBox').hidden = true;
   const r = N.splitWith(pkg); if (r !== 'OK') { toast(r); return; }
   setTimeout(() => { if (call('multiWin')) toast('分屏好了 👏', 1800); else toast('系統沒有讓它分屏（只開了一邊）。可以再按一次試試，或把這個情況告訴我', 5000); }, 1800);
@@ -1068,8 +1066,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { aut
   $('#qList').addEventListener('click', e => { const b = e.target.closest('[data-a]'), r = e.target.closest('.ql'); if (!b || !r) return; const j = Q.find(x => x.id === r.dataset.id); if (j) act(j, b.dataset.a); });
   $('#stageInfo').addEventListener('click', e => { const b = e.target.closest('[data-a]'), j = curJob(); if (b && b.dataset.a === 'cancelAll') { Q.filter(x => x.state === 'run' || x.state === 'wait').forEach(x => act(x, 'cancel')); return; } if (!b || !j) return; if (b.dataset.a === 'open') { autoStop(); stagePause(); } act(j, b.dataset.a); });
 }
-function openF(f) { if (!f) return; if (has('fileExists') && f.uri && !N.fileExists(f.uri)) { toast('檔案已經被刪除或搬走了'); return; } has('openFile') ? N.openFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
-function shareF(f) { if (!f) return; has('shareFile') ? N.shareFile(f.uri, f.mime || '') : toast('這版外殼不支援，請更新 APK'); }
+function openF(f) { if (!f) return; if (has('fileExists') && f.uri && !N.fileExists(f.uri)) { toast('檔案已經被刪除或搬走了'); return; } call('openFile', f.uri, f.mime || ''); }
+function shareF(f) { if (!f) return; call('shareFile', f.uri, f.mime || ''); }
 function act(j, a) {
   const f = (j.files || [])[0];
   if (a === 'cancel') { j.stop = 1; if (j.state === 'wait' || j.igWait) { j.igWait = false; j.state = 'cancel'; j.msg = '已取消'; drawCard(j); saveQ(); } else call('cancel', j.pid); }
@@ -1278,7 +1276,7 @@ function saveCode(s, text) {
   const exp = Math.floor(Date.now() / 1000) + 365 * 86400;
   return !!call('saveCookies', s.ck, '# Netscape HTTP Cookie File\n' + pairs.map(([k, v]) => `${d}\tTRUE\t/\tTRUE\t${exp}\t${k}\t${v}`).join('\n') + '\n');
 }
-$('#bCkImport').onclick = () => { if (!has('pickFile')) { toast('這版外殼不支援，請更新 APK'); return; } N.pickFile('text/*', 'cookie:' + $('#ckSite').value); };
+$('#bCkImport').onclick = () => { call('pickFile', 'text/*', 'cookie:' + $('#ckSite').value); };
 $('#bCkAll').onclick = () => $('#ckAllAsk').hidden = false;
 $('#bCkAllNo').onclick = () => $('#ckAllAsk').hidden = true;
 $('#bCkAllYes').onclick = () => { call('clearCookies', '*'); $('#ckAllAsk').hidden = true; drawSites(); toast('已刪掉所有登入資料'); };
@@ -1332,10 +1330,10 @@ function drawSet() {
 $('#sSubLang').onchange = () => { S.subLang = $('#sSubLang').value.trim() || DEF.subLang; saveS(); };
 $('#concDn').onclick = () => { S.conc = Math.max(1, S.conc - 1); saveS(); $('#concV').textContent = S.conc; };
 $('#concUp').onclick = () => { S.conc = Math.min(5, S.conc + 1); saveS(); $('#concV').textContent = S.conc; pump(); };
-$('#bDest').onclick = () => { if (!has('pickTree')) { toast('這版外殼不支援，請更新 APK'); return; } N.pickTree(); };
+$('#bDest').onclick = () => call('pickTree');
 window.onTree = s => { const r = JSON.parse(s); if (!r.ok) return; S.dest = { uri: r.uri, name: r.name }; saveS(); drawSet(); toast('之後會存到「' + r.name + '」'); };
 $('#bDestDef').onclick = () => { S.dest = null; saveS(); drawSet(); toast('改回手機的「下載/YTDown」'); };
-$('#bOpenDir').onclick = () => { if (has('openFolder')) N.openFolder(S.dest && S.dest.uri ? S.dest.uri : ''); else toast('這版外殼不支援，請更新 APK'); };
+$('#bOpenDir').onclick = () => call('openFolder', S.dest && S.dest.uri ? S.dest.uri : '');
 $('#bNotify').onclick = () => { if (env.notify === false && LS('askedNotify')) call('appSettings'); else { call('askNotify'); LS('askedNotify', 1); } setTimeout(drawSet, 1500); };
 $('#bBattery').onclick = () => call('askBatteryExempt');
 $('#bReset').onclick = () => { const keep = { dest: S.dest }; S = Object.assign({}, DEF, keep); saveS(); sel = { q: S.quality, playlist: S.playlist, subs: S.subs, embed: S.embed, sponsor: S.sponsor, chapters: false }; applyTheme(); drawSet(); drawQual(); toast('設定已還原（存檔位置保留）'); };
@@ -1419,25 +1417,22 @@ $('#bPick').onclick = () => { $('#updMsg').textContent = '選檔中…'; call('p
 $('#bReload').onclick = () => { if (has('reload')) N.reload(); else location.reload(); };
 function stoShow() {
   const el = $('#stoInfo'); if (!el) return;
-  if (!has('storage')) { el.textContent = '要裝新外殼 YTD_V0.1.18 才看得到'; $('#bSweep').hidden = true; return; }
   const u = jcall('storage') || {};
   el.textContent = `共 ${fmtSize(u.all) || '0 B'} · 可清 ${fmtSize(u.tmp + u.cache) || '0 B'}（核心本身約 150 MB）`;
 }
 $('#bSweep').onclick = () => {
-  if (!has('sweep')) { toast('這版外殼不支援，請裝新外殼'); return; }
-  const n = N.sweep();
+  const n = +call('sweep') || 0;
   toast(n > 0 ? '清掉了 ' + fmtSize(n) : '沒有可以清的暫存', 2200); stoShow();
 };
-$('#bResetUi').onclick = () => { if (has('resetUi')) N.resetUi(); else toast('這版外殼不支援'); };
+$('#bResetUi').onclick = () => call('resetUi');
 
 // ---- 備份
 $('#bExport').onclick = () => {
-  if (!has('exportText')) { toast('這版外殼不支援，請更新 APK'); return; }
   const d = new Date(), name = `YTD_備份_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
   const p = N.exportText(name, JSON.stringify({ app: 'YTDown', ver: UI_VER, t: Date.now(), set: S, hist: LS('hist') || [], updurl: LS('updurl') || '' }));
   toast(p ? '已存到 ' + p : '匯出失敗', 3500);
 };
-$('#bImport').onclick = () => { if (!has('pickFile')) { toast('這版外殼不支援，請更新 APK'); return; } N.pickFile('application/json', 'import'); };
+$('#bImport').onclick = () => call('pickFile', 'application/json', 'import');
 function importBackup(text) {
   let j; try { j = JSON.parse(text); } catch (e) { toast('這不是備份檔'); return; }
   if (j.app !== 'YTDown') { toast('這不是 YT Download 的備份檔'); return; }
@@ -1458,7 +1453,6 @@ function igStat() {
 }
 function openIg(user, uid) {
   user = String(user || '').replace(/^@/, '').trim(); if (!user) return;
-  if (!has('http')) { toast(friendly('IG_SHELL'), 4500); return; }
   Object.assign(IGP, { user, uid: uid || '', posts: [], sel: new Set(), next: '', more: true, loading: false, total: 0, priv: false });
   $('#igGrid').innerHTML = ''; $('#igName').textContent = '@' + user; $('#igMsg').textContent = ''; $('#igMore').hidden = true;
   $('#igPane').hidden = false; $('#igPane').scrollTop = 0; document.body.classList.add('locked'); igStat();
