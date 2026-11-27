@@ -73,15 +73,19 @@ object Engine {
                 d.walkBottomUp().filter { it.isFile && it.lastModified() < old }.forEach { val n = it.length(); if (it.delete()) freed += n }
             }
         }
+        useAt = 0L
         return freed
     }
     /** 空間用量（給設定頁看） */
+    @Volatile private var useCache = ""; @Volatile private var useAt = 0L
     fun usage(): String {
+        if (useCache.isNotEmpty() && System.currentTimeMillis() - useAt < 60_000) return useCache   // 一分鐘內用上次算的（整個資料夾走一遍很慢）
         val ext = ctx.getExternalFilesDir(null)
         val tmp = listOfNotNull(ext, ctx.cacheDir).distinct().sumOf { r -> r.listFiles()?.filter { it.name.startsWith("tmp_") }?.sumOf { sizeOf(it) } ?: 0L }
         val tg = sizeOf(tgFiles()) + sizeOf(File(ctx.cacheDir, "update"))
         val all = sizeOf(ctx.filesDir.parentFile) + sizeOf(ext)
-        return JSONObject().put("tmp", tmp).put("cache", tg).put("all", all).put("busy", jobs.size).toString()
+        useCache = JSONObject().put("tmp", tmp).put("cache", tg).put("all", all).put("busy", jobs.size).toString(); useAt = System.currentTimeMillis()
+        return useCache
     }
 
     // ---------- 背景：有工作就掛前景服務＋WakeLock，沒工作就收掉

@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.78';
+const UI_VER = 'YTD_UI_V0.1.79';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.24（外殼）／YTD_UI_V0.1.79', ['設定頁打開更快：「App 佔用空間」一分鐘內用上次算好的結果（按「清理」後會重算）']],
   ['YTD_UI_V0.1.78', ['平板橫放：下載頁變成左右兩欄（左邊貼上和選項、右邊大畫面），不用一直往下捲', '檢查更新再精簡']],
   ['YTD_UI_V0.1.77', ['紀錄搜尋：打字停一下才重新整理，紀錄多時打字不卡']],
   ['YTD_UI_V0.1.76', ['紀錄很多時更順：多張貼文裡的影片小圖也改成捲到附近才載入（以前一次全部載入）', '打不開的小圖不再顯示破圖示']],
