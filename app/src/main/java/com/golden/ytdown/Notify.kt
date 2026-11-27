@@ -15,8 +15,7 @@ import androidx.core.app.NotificationManagerCompat
 
 /** 通知：下載中（常駐、安靜）＋下載完成（一般）。 */
 object Notify {
-    const val CH_RUN = "ytd_run"; const val CH_DONE = "ytd_done"; const val ONGOING_ID = 1
-    private var seq = 100
+    const val CH_RUN = "ytd_run"; const val CH_DONE = "ytd_done"; const val ONGOING_ID = 1; const val DONE_ID = 2
 
     fun channels(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java) ?: return
@@ -36,14 +35,18 @@ object Notify {
         try { NotificationManagerCompat.from(c).notify(ONGOING_ID, ongoing(c, n, text)) } catch (_: SecurityException) {}
     }
 
+    /** 完成／失敗合成同一則通知（不會一個下載一則堆滿通知欄）；回到 App 就清掉重算 */
+    @Volatile private var okN = 0; @Volatile private var badN = 0
     fun done(c: Context, title: String, ok: Boolean) {
+        if (ok) okN++ else badN++
+        val head = listOfNotNull(if (okN > 0) "完成 $okN 個" else null, if (badN > 0) "失敗 $badN 個" else null).joinToString("、")
         val n = NotificationCompat.Builder(c, CH_DONE)
-            .setSmallIcon(R.drawable.ic_stat)
-            .setContentTitle(if (ok) "下載完成" else "下載失敗")
-            .setContentText(title.take(120)).setAutoCancel(true)
+            .setSmallIcon(R.drawable.ic_stat).setContentTitle("YT Download：$head")
+            .setContentText((if (ok) "最新：" else "失敗：") + title.take(120)).setAutoCancel(true).setOnlyAlertOnce(okN + badN > 1)
             .setContentIntent(open(c)).build()
-        try { NotificationManagerCompat.from(c).notify(seq++, n) } catch (_: SecurityException) {}
+        try { NotificationManagerCompat.from(c).notify(DONE_ID, n) } catch (_: SecurityException) {}
     }
+    fun clearDone(c: Context) { okN = 0; badN = 0; try { NotificationManagerCompat.from(c).cancel(DONE_ID) } catch (_: Exception) {} }
 }
 
 /** 有下載在跑時讓 App 留在前景服務，切到背景不會被系統殺掉。 */

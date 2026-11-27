@@ -11,8 +11,8 @@ android {
         applicationId = "com.golden.ytdown"
         minSdk = 26
         targetSdk = 34
-        versionCode = 122
-        versionName = "YTD_V0.1.22"
+        versionCode = 123
+        versionName = "YTD_V0.1.23"
         ndk { abiFilters += listOf("arm64-v8a") }   // 只留現在手機用的 64 位元，APK 從 160MB 縮到約三分之一
     }
     // 固定簽章：keystore/ytd.jks（BUILD_APK.bat 第一次會自動產生）。同一把鑰匙打包，手機才能直接覆蓋安裝

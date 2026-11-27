@@ -114,7 +114,7 @@ class MainActivity : AppCompatActivity() {
         loadUi()
     }
 
-    override fun onResume() { super.onResume(); Engine.sink = { fn, arg -> js(fn, arg) }; js("onResume", "") }
+    override fun onResume() { super.onResume(); Engine.sink = { fn, arg -> js(fn, arg) }; Notify.clearDone(this); js("onResume", "") }
     /** 小窗、分屏時 App 一直是「開著」的，被點到才拿到焦點；Android 10 起只有拿到焦點才讀得到剪貼簿 */
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) js("onFocusWin", "") }
     override fun onNewIntent(i: Intent) { super.onNewIntent(i); setIntent(i); incoming(i)?.let { js(it.first, it.second) } }

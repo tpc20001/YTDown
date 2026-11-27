@@ -178,7 +178,8 @@ object Tg {
                     }
                     val src = File(f.local.path)
                     val nm = String.format("%02d ", i + 1).takeIf { media.size > 1 }.orEmpty() + md.name.replace(Regex("[\\\\/:*?\"<>|\\n\\r]"), "_")
-                    src.copyTo(File(dir, nm), overwrite = true)
+                    val dst = File(dir, nm); dst.delete()
+                    if (!src.renameTo(dst)) src.copyTo(dst, overwrite = true, bufferSize = 1 shl 20)   // 同一個磁碟就直接搬，不用多複製一次
                     doneBefore += maxOf(f.size, f.expectedSize)
                 } finally {
                     withContext(NonCancellable) { try { c.cancelDownloadFile(fileId = fid, onlyIfPending = false); c.deleteFile(fileId = fid) } catch (_: Exception) {} }

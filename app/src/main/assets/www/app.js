@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.72';
+const UI_VER = 'YTD_UI_V0.1.73';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.23（外殼）／YTD_UI_V0.1.73', ['完成通知合成一則「完成 N 個、失敗 N 個」，不會一個下載一則堆滿通知欄；打開 App 就清掉', 'Telegram 下載完直接搬檔，不再多複製一次，大影片存得比較快']],
   ['YTD_V0.1.22（外殼）／YTD_UI_V0.1.72', ['修正：分享一個已經下載過的網址時，會先跳「已加入」又跳「略過」；現在只會跳一個正確的提示', 'App 內登入／逛網站頁的按鈕改成暗色']],
   ['YTD_V0.1.21（外殼）／YTD_UI_V0.1.71', ['存檔加快：下載好的檔案搬到「下載／相簿」時用大緩衝，大檔搬得比較快', '存到一半失敗不會在下載資料夾留下空檔或壞檔', '存檔程式合併整理（下載、相簿、自選資料夾共用）']],
   ['YTD_UI_V0.1.70', ['修正 0.1.68／0.1.69：播放器和下載頁的時間顯示會卡死、下載完不會自動播放（請盡快更新）', '下載頁影片的 ▶ 鈕從畫面正中間移到左下角，不擋畫面']],
