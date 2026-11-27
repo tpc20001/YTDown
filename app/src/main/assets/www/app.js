@@ -1,11 +1,12 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.68';
+const UI_VER = 'YTD_UI_V0.1.69';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const LS = (k, v) => { try { if (v === undefined) return JSON.parse(localStorage.getItem('ytd_' + k) || 'null'); localStorage.setItem('ytd_' + k, JSON.stringify(v)); } catch (e) { return null; } };
+const LSC = {};   // 讀過的存在記憶體，不用每次重新解析（紀錄很多時省很多）
+const LS = (k, v) => { try { if (v === undefined) return k in LSC ? LSC[k] : (LSC[k] = JSON.parse(localStorage.getItem('ytd_' + k) || 'null')); LSC[k] = v; localStorage.setItem('ytd_' + k, JSON.stringify(v)); } catch (e) { return null; } };
 const has = f => !!(N && typeof N[f] === 'function');
 const call = (f, ...a) => { if (!has(f)) return null; try { return N[f](...a); } catch (e) { return null; } };
 const jcall = (f, ...a) => { const r = call(f, ...a); try { return r ? JSON.parse(r) : null; } catch (e) { return null; } };
@@ -29,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.69', ['效率：設定、紀錄讀過一次就留在記憶體，不再每次重新解析（紀錄多時明顯變順）', '下載進度一個畫面週期最多重畫一次，同時下載好幾個也不會卡']],
   ['YTD_V0.1.20（外殼）／YTD_UI_V0.1.68', ['內部整理：三種下載方式（一般、IG／TikTok 直接抓、Telegram）共用同一套存檔流程，程式更短、更好維護；功能不變']],
   ['YTD_UI_V0.1.67', ['平台頁：IG、FB 拿掉「App 內登入」，只留貼代碼', '下載頁：一次好幾個、或還沒有縮圖時，進度改成一塊小卡片，不再佔掉大半個畫面的黑框；進度百分比不重複顯示', '沒縮圖的小格改成深灰底']],
   ['YTD_UI_V0.1.66', ['設定頁簡化：只留常用的 6 項＋手機權限，其他收進「進階設定」（點一下展開）；「有網址就自動下載」和「回到 App 抓剪貼簿」合成一個開關', '更新頁簡化：只剩「檢查更新」和下載核心，手動更新收起來；更新紀錄只顯示最近 3 版', '紀錄每一筆只留「分享」和「⋯」，其他（再下載、複製連結、刪檔案、刪紀錄）在 ⋯ 裡；點縮圖就播放', '主要按鈕改成暗藍色（原本是白色），晚上看不刺眼']],
@@ -752,7 +754,7 @@ function stText(j, noPct) {
   if (j.state === 'ok') return '已存到 ' + (j.files[0] ? j.files[0].path : '') + (j.files.length > 1 ? `（共 ${j.files.length} 個檔）` : '') + (j.took ? ' · 花了 ' + fmtEta(j.took) : '');
   return j.msg;
 }
-function drawCard(j) { drawStage(); drawQueue(); counts(); }
+function drawCard() { if (drawCard.r) return; drawCard.r = requestAnimationFrame(() => { drawCard.r = 0; drawStage(); drawQueue(); counts(); }); }   // 一個畫面週期最多重畫一次
 
 // =====================================================================
 // 大畫面：下載頁中間只顯示「目前這一個」
