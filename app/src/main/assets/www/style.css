@@ -360,3 +360,12 @@ video.thumb{object-fit:cover;background:#000;pointer-events:none}
 .stage.empty{height:auto;min-height:120px}
 .ql-t,div.thumb{background:var(--surf2)}
 .st-play{left:12px;top:auto;bottom:12px;transform:none;width:44px;height:44px;font-size:17px;background:rgba(0,0,0,.45)}
+/* 平板橫放：下載頁左右兩欄（左邊貼上和選項、右邊大畫面），不用一直往下捲 */
+@media (min-width:1000px) and (orientation:landscape){
+body[data-p="dl"] main{max-width:1280px}
+#p_dl.on{display:grid;grid-template-columns:minmax(340px,420px) 1fr;column-gap:18px;align-items:start}
+#p_dl>*{grid-column:2}
+#p_dl>.panel{grid-column:1;grid-row:1/span 8;position:sticky;top:12px}
+#p_dl .stage{margin-top:0;height:calc(var(--vh,1vh)*72 - 60px)}
+#p_dl .stage.batch,#p_dl .stage.bare,#p_dl .stage.empty{height:auto}
+}

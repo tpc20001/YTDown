@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.77';
+const UI_VER = 'YTD_UI_V0.1.78';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.78', ['平板橫放：下載頁變成左右兩欄（左邊貼上和選項、右邊大畫面），不用一直往下捲', '檢查更新再精簡']],
   ['YTD_UI_V0.1.77', ['紀錄搜尋：打字停一下才重新整理，紀錄多時打字不卡']],
   ['YTD_UI_V0.1.76', ['紀錄很多時更順：多張貼文裡的影片小圖也改成捲到附近才載入（以前一次全部載入）', '打不開的小圖不再顯示破圖示']],
   ['YTD_UI_V0.1.75', ['夜間更舒服：選中的選項、IG 的「下載」鈕、播放器的開關鈕都改成暗底＋藍框，不再是整塊亮藍色']],
@@ -233,7 +234,7 @@ function page(p) {
   if (p === 'set') setTimeout(stoShow, 50);
   if (p !== 'dl') { autoStop(); stagePause(); }
   window.scrollTo(0, 0);
-  LS('page', p);
+  LS('page', p); document.body.dataset.p = p;
 }
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => page(b.dataset.p));
 window.onBack = () => {
@@ -1394,12 +1395,11 @@ $('#updGo').onclick = () => {
   else { autoReload = true; toast('更新中…'); call('checkUpdate', updInfo.u); }
 };
 // 舊外殼（V0.1.06）在 App 裡下載大檔會不穩，改用瀏覽器下載；V0.1.07 起在 App 裡下載並顯示進度
-function getApk(u) { if (has('fetchJob')) { toast('下載新外殼中，下載完會跳出安裝畫面', 5000); N.installApk(u); } else { call('openUrl', u); toast('用瀏覽器下載新外殼，下載完點開安裝', 7000); } }
+function getApk(u) { if (N) { toast('下載新外殼中，下載完會跳出安裝畫面', 5000); N.installApk(u); } else { call('openUrl', u); toast('用瀏覽器下載新外殼，下載完點開安裝', 7000); } }
 $('#updLater').onclick = () => { LS('updSkip', $('#updBar').dataset.key); $('#updBar').hidden = true; };
 setInterval(() => autoCheck(false), 5 * 60e3);
 $('#bChk').onclick = () => {
   const u = updUrl(); $('#updMsg').textContent = '檢查中…'; $('#bApk').hidden = true; $('#bReload').hidden = true;
-  if (!has('httpGet')) { call('checkUpdate', u); return; }
   const id = req('h', r => {
     let j; try { j = JSON.parse(r.body); } catch (e) { $('#updMsg').textContent = '讀不到 update.json（' + (r.status || '連不上') + '）'; return; }
     const msgs = [];
@@ -1412,12 +1412,12 @@ $('#bChk').onclick = () => {
 };
 window.onHttp = s => { const r = JSON.parse(s); settle(r.id, r); };
 window.onUpd = s => { const p = JSON.parse(s); $('#updMsg').textContent = p.msg; $('#bReload').hidden = !p.ok;
-  if (autoReload) { autoReload = false; if (p.ok && has('reload')) N.reload(); else toast(p.msg, 4000); } };
+  if (autoReload) { autoReload = false; if (p.ok) call('reload'); else toast(p.msg, 4000); } };
 $('#bApk').onclick = () => { if (apkHref) getApk(apkHref); };
 $('#bApkUrl').onclick = () => { const el = $('#apkUrl'); if (el.hidden) { el.hidden = false; el.focus(); return; } const u = el.value.trim(); if (!/^https?:\/\//.test(u)) { toast('先貼上 APK 的網址'); return; } if (!has('installApk')) { toast('這版外殼不支援，請用電腦重做 APK'); return; } N.installApk(u); };
 window.onApk = s => { const r = JSON.parse(s); $('#updMsg').textContent = r.msg; if (r.stage === 'dl') { if (!$('#updBar').hidden) $('#updTxt').textContent = r.msg; } else toast(r.msg, 4000); };
 $('#bPick').onclick = () => { $('#updMsg').textContent = '選檔中…'; call('pickUpdate'); };
-$('#bReload').onclick = () => { if (has('reload')) N.reload(); else location.reload(); };
+$('#bReload').onclick = () => N ? N.reload() : location.reload();
 function stoShow() {
   const el = $('#stoInfo'); if (!el) return;
   const u = jcall('storage') || {};
@@ -1717,7 +1717,7 @@ applyTheme(); refreshEnv();
 drawQual(); drawPreview(); counts(); drawVer(); drawStage();
 $('#dlOpts').hidden = !currentUrls().length;
 restore(); drawStage(); infoLine(); pump();
-{ const p = LS('page'); if (p && PAGES.includes(p) && p !== 'dl') page(p); }
+{ const p = LS('page'); page(p && PAGES.includes(p) ? p : 'dl'); }
 setTimeout(() => { if (S.autoCore && has('updateCoreCh') && Date.now() - (LS('coreAt') || 0) > 20 * 3600e3) { $('#coreMsg').textContent = '自動更新中…'; call('updateCoreCh', S.channel); } }, 1500);
 clipSoon();
 setTimeout(() => autoCheck(true), 3000);
