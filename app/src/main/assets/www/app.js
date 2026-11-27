@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.80';
+const UI_VER = 'YTD_UI_V0.1.81';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -36,6 +36,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.81', ['下載到一半 App 被手機關掉的，重新打開會自動接著重抓（最多兩次），不用自己按重試']],
   ['YTD_UI_V0.1.80', ['修正：失敗後按重試成功，紀錄裡會留著舊的失敗那筆（一組的會一直顯示「1 個失敗」）；現在會換成成功的', '紀錄太多、手機給的儲存空間滿了時，自動刪掉最舊的一部分再存，不會整批沒存到']],
   ['YTD_V0.1.24（外殼）／YTD_UI_V0.1.79', ['設定頁打開更快：「App 佔用空間」一分鐘內用上次算好的結果（按「清理」後會重算）']],
   ['YTD_UI_V0.1.78', ['平板橫放：下載頁變成左右兩欄（左邊貼上和選項、右邊大畫面），不用一直往下捲', '檢查更新再精簡']],
@@ -563,7 +564,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc', 'doneAt', 'grp', 'grpN', 'badSaved'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc', 'doneAt', 'grp', 'grpN', 'badSaved', 'revive'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -1097,7 +1098,7 @@ function restore() {
   const live = new Set((jcall('jobsState') || []).map(x => x.id));
   saved.reverse().forEach(o => { if (Q.some(j => j.id === o.id)) return; const j = Object.assign({}, o); Q.unshift(j); });
   const missed = jcall('drain') || [];
-  Q.forEach(j => { if (j.state === 'run' && !live.has(j.pid) && !missed.some(m => m.fn === 'onDone' && (JSON.parse(m.arg).id === j.pid))) { j.state = 'bad'; j.msg = 'App 被關掉時中斷了，按重試'; } });
+  Q.forEach(j => { if (j.state === 'run' && !live.has(j.pid) && !missed.some(m => m.fn === 'onDone' && (JSON.parse(m.arg).id === j.pid))) { j.revive = (j.revive || 0) + 1; if (j.revive <= 2) { j.state = 'wait'; j.k = 0; j.stop = 0; } else { j.state = 'bad'; j.msg = 'App 被關掉時中斷了，按重試'; } } });   // 被系統關掉的：自動接著重抓（最多兩次）
   [...Q].reverse().forEach(drawCard);
   trimDone();
   missed.forEach(m => { try { if (typeof window[m.fn] === 'function') window[m.fn](m.arg); } catch (e) {} });
