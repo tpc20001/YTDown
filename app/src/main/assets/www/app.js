@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.75';
+const UI_VER = 'YTD_UI_V0.1.76';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.76', ['紀錄很多時更順：多張貼文裡的影片小圖也改成捲到附近才載入（以前一次全部載入）', '打不開的小圖不再顯示破圖示']],
   ['YTD_UI_V0.1.75', ['夜間更舒服：選中的選項、IG 的「下載」鈕、播放器的開關鈕都改成暗底＋藍框，不再是整塊亮藍色']],
   ['YTD_UI_V0.1.74', ['再清掉一批舊外殼才需要的檢查和提示文字，程式更短']],
   ['YTD_V0.1.23（外殼）／YTD_UI_V0.1.73', ['完成通知合成一則「完成 N 個、失敗 N 個」，不會一個下載一則堆滿通知欄；打開 App 就清掉', 'Telegram 下載完直接搬檔，不再多複製一次，大影片存得比較快']],
@@ -1137,7 +1138,7 @@ let vtObs = null;
 function wireVThumbs() {
   if (!vtObs) vtObs = new IntersectionObserver(es => es.forEach(e => {
     if (!e.isIntersecting) return; const v = e.target; vtObs.unobserve(v);
-    v.onerror = () => { const b = v.dataset.back; v.replaceWith(Object.assign(document.createElement(b ? 'img' : 'div'), b ? { className: 'thumb', src: b } : { className: 'thumb thumb-ic', textContent: '▶' })); };
+    v.onerror = () => { if (v.closest('.tile')) { v.style.visibility = 'hidden'; return; } const b = v.dataset.back; v.replaceWith(Object.assign(document.createElement(b ? 'img' : 'div'), b ? { className: 'thumb', src: b } : { className: 'thumb thumb-ic', textContent: '▶' })); };
     v.preload = 'metadata'; v.src = v.dataset.src;
   }), { rootMargin: '400px' });
   document.querySelectorAll('#hist video.vthumb[data-src]:not([src])').forEach(v => vtObs.observe(v));
@@ -1188,7 +1189,7 @@ function drawHist() {
     const f = h.files && h.files[0], total = szOf(h);
     const Mw = h.ok && !h.gone ? mediaOf(h.files) : [], nw = Mw.filter(x => isW(W, x)).length, seenTag = nw ? `<span class="seen-b">✓ 看過${Mw.length > 1 ? ` ${nw}/${Mw.length}` : ''}</span>` : '';
     const M = h.ok && !h.gone ? mediaOf(h.files) : [], multi = M.length > 1;
-    const strip = multi ? `<div class="strip">${M.slice(0, 40).map((x, n) => `<button class="tile" type="button" data-a="openAt" data-n="${n}" aria-label="第 ${n + 1} 個"${isW(W, x) ? ' data-w="1"' : ''}>${mimeOf(x).startsWith('image/') ? `<img src="${esc(x.uri)}" alt="" loading="lazy">` : mimeOf(x).startsWith('video/') ? `<video src="${esc(x.uri)}#t=0.5" preload="metadata" muted playsinline></video><span class="tile-k">影片</span>` : '<span class="tile-k">聲音</span>'}</button>`).join('')}${M.length > 40 ? `<span class="mut small">還有 ${M.length - 40} 個</span>` : ''}</div>` : '';
+    const strip = multi ? `<div class="strip">${M.slice(0, 40).map((x, n) => `<button class="tile" type="button" data-a="openAt" data-n="${n}" aria-label="第 ${n + 1} 個"${isW(W, x) ? ' data-w="1"' : ''}>${mimeOf(x).startsWith('image/') ? `<img src="${esc(x.uri)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : mimeOf(x).startsWith('video/') ? `<video class="vthumb" data-src="${esc(x.uri)}#t=0.5" preload="none" muted playsinline></video><span class="tile-k">影片</span>` : '<span class="tile-k">聲音</span>'}</button>`).join('')}${M.length > 40 ? `<span class="mut small">還有 ${M.length - 40} 個</span>` : ''}</div>` : '';
     return `<div class="card ${h.ok ? 'ok' : 'bad'}${h.gone ? ' gone' : ''}${multi ? ' multi' : ''}" data-i="${h.i}">${multi ? '' : `<button class="tbtn" type="button" data-a="open" aria-label="播放">${histThumb(h)}${seenTag}</button>`}<div class="cb">
       <div class="ct">${multi ? seenTag : ''}${esc(h.title || h.u)}</div>
       <div class="cm"><span class="badge">${esc(h.ab || '網址')}</span>${h.uploader ? `<button class="link who" type="button" data-a="who">${esc((h.site === 'Instagram' ? '@' : '') + h.uploader)}</button>` : ''}<span>${fmtTime(h.t)}</span><span>${esc(qShow(h.q || 'best', h.res))}</span>${total ? `<span>${fmtSize(total)}</span>` : ''}${h.grp ? `<span>${hUrls(h).length} 個網址</span>` : ''}${(h.files || []).length > 1 ? `<span>${h.files.length} 個檔</span>` : ''}${h.grp && h.nBad ? `<span class="bad-t">${h.nBad} 個失敗</span>` : ''}</div>
