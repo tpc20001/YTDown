@@ -1,18 +1,6 @@
 /* YT Download 畫面 — 跟圖示 #41 一樣的黑白極簡，電光藍只用在進度和選取 */
-:root{
-  --bg:#0b0c0e; --surf:#15171b; --surf2:#1e2126; --line:#2a2e35;
-  --fg:#f2f3f5; --mut:#8b919b; --acc:#4dc9ff; --ok:#45d483; --bad:#ff5c6c; --warn:#ffb547;
-  --pri:#173444; --prifg:#c9eeff; --markbg:#111316; --markfg:#ffffff;
-  --r:14px; --font:system-ui,"Noto Sans TC","Noto Sans CJK TC",sans-serif;
-  --mono:ui-monospace,"Roboto Mono",monospace;
-  color-scheme:dark;
-}
-:root[data-theme="light"]{
-  --bg:#f3f4f6; --surf:#ffffff; --surf2:#eceef1; --line:#d9dce1;
-  --fg:#111316; --mut:#5f6672; --acc:#0a8fc4; --ok:#1a9a5c; --bad:#d63447; --warn:#b97400;
-  --pri:#111316; --prifg:#ffffff; --markbg:#111316; --markfg:#ffffff;
-  color-scheme:light;
-}
+:root{--bg:#0b0c0e;--surf:#15171b;--surf2:#1e2126;--line:#2a2e35;--fg:#f2f3f5;--mut:#8b919b;--acc:#4dc9ff;--ok:#45d483;--bad:#ff5c6c;--warn:#ffb547;--pri:#173444;--prifg:#c9eeff;--markbg:#111316;--markfg:#ffffff;--r:14px;--font:system-ui,"Noto Sans TC","Noto Sans CJK TC",sans-serif;--mono:ui-monospace,"Roboto Mono",monospace;color-scheme:dark}
+:root[data-theme="light"]{--bg:#f3f4f6;--surf:#ffffff;--surf2:#eceef1;--line:#d9dce1;--fg:#111316;--mut:#5f6672;--acc:#0a8fc4;--ok:#1a9a5c;--bad:#d63447;--warn:#b97400;--pri:#111316;--prifg:#ffffff;--markbg:#111316;--markfg:#ffffff;color-scheme:light}
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]):not([data-theme="light"]).auto{
   --bg:#f3f4f6; --surf:#ffffff; --surf2:#eceef1; --line:#d9dce1;
   --fg:#111316; --mut:#5f6672; --acc:#0a8fc4; --ok:#1a9a5c; --bad:#d63447; --warn:#b97400;
@@ -73,7 +61,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
 .badge{flex:none;display:inline-grid;place-items:center;min-width:34px;height:22px;padding:0 6px;border-radius:6px;background:var(--surf2);border:1px solid var(--line);font:700 11px var(--font);color:var(--fg);letter-spacing:.02em}
 
 /* 剪貼簿提示 */
-.clip{display:flex;align-items:center;gap:8px;background:var(--surf);border:1px solid var(--acc);border-radius:var(--r);padding:10px 12px;margin-bottom:10px}
+.clip{display:flex;align-items:center;gap:8px;background:var(--surf);border:1px solid var(--acc);border-radius:var(--r);margin-bottom:10px}
 .clip-t{display:flex;flex-direction:column;min-width:0;flex:1}
 .clip-u{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
@@ -90,7 +78,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
 /* 下載卡片、紀錄 */
 .list{display:flex;flex-direction:column;gap:8px}
 .card{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:10px;display:flex;gap:10px}
-.card .thumb{width:96px}
+
 .cb{min-width:0;flex:1;display:flex;flex-direction:column;gap:5px}
 .ct{font-size:13.5px;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
 .cm{font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-variant-numeric:tabular-nums}
@@ -108,7 +96,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
 .state.run{color:var(--acc);border-color:var(--acc)} .state.ok{color:var(--ok);border-color:var(--ok)} .state.bad{color:var(--bad);border-color:var(--bad)}
 
 /* 平台清單 */
-.site{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;gap:12px;align-items:center;cursor:pointer;text-align:left;width:100%}
+.site{background:var(--surf);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;gap:12px;align-items:center;text-align:left;width:100%}
 .site .badge{min-width:42px;height:28px;font-size:12px}
 .site-b{min-width:0;flex:1}
 .site-n{font-weight:700;font-size:14px}
@@ -233,7 +221,7 @@ body.locked{overflow:hidden}
 .p-rate-row b{min-width:64px;text-align:center;font-size:18px;font-variant-numeric:tabular-nums}
 .p-rate-row button{padding:6px 10px;min-width:42px}
 .player button{background:rgba(255,255,255,.14);border:0;color:#fff;border-radius:999px;padding:8px 14px;font-size:14px;cursor:pointer}
-#pPlay{width:72px;height:72px;font-size:28px}
+
 .p-seek{position:absolute;left:50%;top:22%;transform:translateX(-50%);background:rgba(0,0,0,.72);border-radius:14px;padding:10px 18px;font-size:15px;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;pointer-events:none}
 .p-seek b{font-size:22px}
 .p-seek span{display:block;color:#4dc9ff;font-size:14px;margin-top:2px}
@@ -255,8 +243,8 @@ body.locked{overflow:hidden}
 .tile{position:relative;aspect-ratio:1;padding:0;border:0;border-radius:8px;overflow:hidden;background:#000;cursor:pointer}
 .tile img,.tile video{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
 .tile-k{position:absolute;left:4px;bottom:4px;font-size:10.5px;padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.65);color:#fff}
-.stage{position:relative;margin-top:12px;border-radius:var(--r);overflow:hidden;background:#000;height:min(calc(var(--vh,1vh)*64),calc(var(--vw,1vw)*125));display:grid;place-items:center;touch-action:pan-y;user-select:none;-webkit-user-select:none}
-.stage.empty{background:var(--surf);border:1px dashed var(--line);height:min(calc(var(--vh,1vh)*40),calc(var(--vw,1vw)*90));color:var(--mut);text-align:center;font-size:14px;line-height:1.7;padding:16px}
+.stage{position:relative;margin-top:12px;border-radius:var(--r);overflow:hidden;background:#000;display:grid;place-items:center;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.stage.empty{background:var(--surf);border:1px dashed var(--line);color:var(--mut);text-align:center;font-size:14px;line-height:1.7;padding:16px}
 .stage.empty p{margin:0}
 .st-m{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
 .st-m.dim{opacity:.35}
@@ -322,8 +310,7 @@ body.locked{overflow:hidden}
 .split-box .chips{max-height:220px;overflow-y:auto}
 
 /* 大大的「貼上」：整頁最常按的就是它。按下去有 1.5 秒的動畫告訴你加進去了 */
-.big-paste{position:relative;width:100%;min-height:max(46px,calc(var(--vh,1vh)*5.5));flex-direction:row!important;gap:10px!important;border-radius:14px!important;border:2px solid color-mix(in srgb,var(--acc) 45%,transparent);border-radius:20px;background:color-mix(in srgb,var(--acc) 12%,var(--surf));color:var(--fg);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;overflow:hidden;transition:transform .12s,background .25s;touch-action:manipulation}
+.big-paste{position:relative;width:100%;min-height:max(46px,calc(var(--vh,1vh)*5.5));flex-direction:row!important;gap:10px!important;border-radius:14px!important;border:2px solid color-mix(in srgb,var(--acc) 45%,transparent);border-radius:20px;background:color-mix(in srgb,var(--acc) 12%,var(--surf));color:var(--fg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;overflow:hidden;transition:transform .12s,background .25s;touch-action:manipulation}
 .big-paste:active{transform:scale(.97)}
 .bp-main{font-size:clamp(16px,4.2vw,20px);font-weight:800;letter-spacing:.03em}
 .bp-sub{font-size:12.5px;opacity:.7}
@@ -350,9 +337,7 @@ video.thumb{object-fit:cover;background:#000;pointer-events:none}
 
 /* 讀到網址的動畫（畫面中間，1.3 秒）：光圈擴散＋勾勾彈出＋數字＋小光點噴開，最後縮小飛向網址框。暗色系，不刺眼 */
 #grabFx{position:fixed;inset:0;z-index:80;pointer-events:none;display:grid;place-items:center}
-#grabFx .gf-core{position:relative;width:132px;height:132px;border-radius:50%;display:grid;place-items:center;
-  background:radial-gradient(circle,color-mix(in srgb,var(--ok) 30%,#0b0d10) 0 60%,transparent 61%);box-shadow:0 0 40px color-mix(in srgb,var(--ok) 45%,transparent);
-  animation:gfCore 1.3s cubic-bezier(.2,.9,.3,1) forwards}
+#grabFx .gf-core{position:relative;width:132px;height:132px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,color-mix(in srgb,var(--ok) 30%,#0b0d10) 0 60%,transparent 61%);box-shadow:0 0 40px color-mix(in srgb,var(--ok) 45%,transparent);animation:gfCore 1.3s cubic-bezier(.2,.9,.3,1) forwards}
 #grabFx .gf-ring{position:absolute;inset:0;border-radius:50%;border:3px solid var(--ok);opacity:0;animation:gfRing 1s ease-out forwards}
 #grabFx .gf-ring.r2{border-color:var(--acc);animation-delay:.15s}
 #grabFx .gf-num{font-size:44px;font-weight:900;color:#e8fff0;text-shadow:0 0 14px color-mix(in srgb,var(--ok) 70%,transparent);animation:gfNum .45s cubic-bezier(.3,1.6,.5,1) both}
