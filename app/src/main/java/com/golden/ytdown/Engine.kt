@@ -113,56 +113,38 @@ object Engine {
     }
     private fun cleanSub(s: String) = s.replace(Regex("[\\\\/:*?\"<>|]"), "").trim().take(40)
 
-    /** dest：""＝手機的「下載/YTDown」；否則是使用者選的資料夾（content://…tree…） */
+    /** dest：""＝手機的「下載/YTDown」（照片、影片可選放「相簿」DCIM/YTDown）；否則是使用者選的資料夾（content://…tree…） */
     private fun publish(f: File, sub: String, dest: String, gallery: String = ""): JSONObject {
-        val mime = mimeOf(f.extension); val size = f.length()
+        val mime = mimeOf(f.extension); val size = f.length(); val s = if (sub.isNotEmpty()) "/$sub" else ""
+        fun out(name: String, path: String, uri: Uri) = JSONObject().put("name", name).put("path", path).put("uri", uri.toString()).put("size", size).put("mime", mime)
+        fun copy(u: Uri) = ctx.contentResolver.openOutputStream(u)!!.use { o -> f.inputStream().use { it.copyTo(o, 1 shl 20) } }   // 1 MB 緩衝，大檔搬比較快
         if (dest.isNotEmpty()) {
             val root = DocumentFile.fromTreeUri(ctx, Uri.parse(dest)) ?: throw Exception("存檔資料夾打不開，請到設定重選")
-            var dir = root
-            if (sub.isNotEmpty()) dir = root.findFile(sub)?.takeIf { it.isDirectory } ?: root.createDirectory(sub) ?: root
+            val dir = if (sub.isEmpty()) root else root.findFile(sub)?.takeIf { it.isDirectory } ?: root.createDirectory(sub) ?: root
             val doc = dir.createFile(mime, f.name) ?: throw Exception("存不進選的資料夾")
-            ctx.contentResolver.openOutputStream(doc.uri)!!.use { o -> f.inputStream().use { it.copyTo(o) } }
-            f.delete()
-            val shown = (root.name ?: "選的資料夾") + (if (sub.isNotEmpty()) "/$sub" else "") + "/" + (doc.name ?: f.name)
-            return JSONObject().put("name", doc.name ?: f.name).put("path", shown).put("uri", doc.uri.toString()).put("size", size).put("mime", mime)
+            copy(doc.uri); f.delete()
+            val nm = doc.name ?: f.name
+            return out(nm, (root.name ?: "選的資料夾") + s + "/" + nm, doc.uri)
         }
-        // 存到相簿：照片（和影片）放進 DCIM/YTDown，手機的相簿 App 才看得到
         val isImg = mime.startsWith("image/"); val isVid = mime.startsWith("video/")
-        if ((gallery == "img" && isImg) || (gallery == "all" && (isImg || isVid))) {
-            val grel = Environment.DIRECTORY_DCIM + "/YTDown" + (if (sub.isNotEmpty()) "/$sub" else "")
-            if (Build.VERSION.SDK_INT >= 29) {
-                val col = if (isImg) MediaStore.Images.Media.EXTERNAL_CONTENT_URI else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                val cv = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, f.name); put(MediaStore.MediaColumns.MIME_TYPE, mime)
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, grel); put(MediaStore.MediaColumns.IS_PENDING, 1)
-                }
-                val uri = ctx.contentResolver.insert(col, cv) ?: throw Exception("存不進相簿")
-                ctx.contentResolver.openOutputStream(uri)!!.use { o -> f.inputStream().use { it.copyTo(o) } }
-                ctx.contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-                f.delete()
-                return JSONObject().put("name", f.name).put("path", "相簿/YTDown" + (if (sub.isNotEmpty()) "/$sub" else "") + "/" + f.name).put("uri", uri.toString()).put("size", size).put("mime", mime)
-            }
-            val d = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "YTDown" + (if (sub.isNotEmpty()) "/$sub" else "")); d.mkdirs()
-            val t = File(d, f.name); f.copyTo(t, true); f.delete()
-            MediaScannerConnection.scanFile(ctx, arrayOf(t.absolutePath), arrayOf(mime), null)
-            val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", t)
-            return JSONObject().put("name", f.name).put("path", t.absolutePath).put("uri", uri.toString()).put("size", size).put("mime", mime)
-        }
-        val rel = "YTDown" + (if (sub.isNotEmpty()) "/$sub" else "")
+        val gal = (gallery == "img" && isImg) || (gallery == "all" && (isImg || isVid))
+        val base = if (gal) Environment.DIRECTORY_DCIM else Environment.DIRECTORY_DOWNLOADS
         if (Build.VERSION.SDK_INT >= 29) {
+            val col = if (!gal) MediaStore.Downloads.EXTERNAL_CONTENT_URI else if (isImg) MediaStore.Images.Media.EXTERNAL_CONTENT_URI else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
             val cv = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, f.name); put(MediaStore.Downloads.MIME_TYPE, mime)
-                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/" + rel)
+                put(MediaStore.MediaColumns.DISPLAY_NAME, f.name); put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "$base/YTDown$s"); put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
-            val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw Exception("存不進下載資料夾")
-            ctx.contentResolver.openOutputStream(uri)!!.use { o -> f.inputStream().use { it.copyTo(o) } }
+            val uri = ctx.contentResolver.insert(col, cv) ?: throw Exception(if (gal) "存不進相簿" else "存不進下載資料夾")
+            try { copy(uri) } catch (e: Exception) { try { ctx.contentResolver.delete(uri, null, null) } catch (_: Exception) {}; throw e }   // 存一半失敗不留空檔
+            ctx.contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
             f.delete()
-            return JSONObject().put("name", f.name).put("path", "下載/$rel/${f.name}").put("uri", uri.toString()).put("size", size).put("mime", mime)
+            return out(f.name, (if (gal) "相簿" else "下載") + "/YTDown$s/" + f.name, uri)
         }
-        val d = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), rel); d.mkdirs()
-        val t = File(d, f.name); f.copyTo(t, true); f.delete()
-        val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".files", t)
-        return JSONObject().put("name", f.name).put("path", t.absolutePath).put("uri", uri.toString()).put("size", size).put("mime", mime)
+        val d = File(Environment.getExternalStoragePublicDirectory(base), "YTDown$s"); d.mkdirs()
+        val t = File(d, f.name); f.copyTo(t, true, 1 shl 20); f.delete()
+        if (gal) MediaScannerConnection.scanFile(ctx, arrayOf(t.absolutePath), arrayOf(mime), null)
+        return out(f.name, t.absolutePath, FileProvider.getUriForFile(ctx, ctx.packageName + ".files", t))
     }
     private fun publishAll(dir: File, sub: String, dest: String, byName: Boolean = false, gallery: String = ""): JSONArray {
         val out = JSONArray(); val skip = setOf("part", "ytdl", "json", "temp", "tmp")

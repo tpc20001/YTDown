@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.70';
+const UI_VER = 'YTD_UI_V0.1.71';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,6 +30,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_V0.1.21（外殼）／YTD_UI_V0.1.71', ['存檔加快：下載好的檔案搬到「下載／相簿」時用大緩衝，大檔搬得比較快', '存到一半失敗不會在下載資料夾留下空檔或壞檔', '存檔程式合併整理（下載、相簿、自選資料夾共用）']],
   ['YTD_UI_V0.1.70', ['修正 0.1.68／0.1.69：播放器和下載頁的時間顯示會卡死、下載完不會自動播放（請盡快更新）', '下載頁影片的 ▶ 鈕從畫面正中間移到左下角，不擋畫面']],
   ['YTD_UI_V0.1.69', ['效率：設定、紀錄讀過一次就留在記憶體，不再每次重新解析（紀錄多時明顯變順）', '下載進度一個畫面週期最多重畫一次，同時下載好幾個也不會卡']],
   ['YTD_V0.1.20（外殼）／YTD_UI_V0.1.68', ['內部整理：三種下載方式（一般、IG／TikTok 直接抓、Telegram）共用同一套存檔流程，程式更短、更好維護；功能不變']],
