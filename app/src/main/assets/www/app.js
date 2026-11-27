@@ -1,12 +1,18 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.79';
+const UI_VER = 'YTD_UI_V0.1.80';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const LSC = {};   // 讀過的存在記憶體，不用每次重新解析（紀錄很多時省很多）
-const LS = (k, v) => { try { if (v === undefined) return k in LSC ? LSC[k] : (LSC[k] = JSON.parse(localStorage.getItem('ytd_' + k) || 'null')); LSC[k] = v; localStorage.setItem('ytd_' + k, JSON.stringify(v)); } catch (e) { return null; } };
+const LS = (k, v) => {
+  try { if (v === undefined) return k in LSC ? LSC[k] : (LSC[k] = JSON.parse(localStorage.getItem('ytd_' + k) || 'null')); } catch (e) { return null; }
+  LSC[k] = v;
+  for (let n = 0; n < 6; n++) {                 // 存不下（手機給網頁的空間滿了）：清單就砍掉最舊的三成再存，不會整個沒存到
+    try { localStorage.setItem('ytd_' + k, JSON.stringify(v)); return; } catch (e) { if (!Array.isArray(v) || v.length < 10) return; v = LSC[k] = v.slice(0, Math.floor(v.length * 0.7)); }
+  }
+};
 const has = f => !!(N && typeof N[f] === 'function');
 const call = (f, ...a) => { if (!has(f)) return null; try { return N[f](...a); } catch (e) { return null; } };
 const jcall = (f, ...a) => { const r = call(f, ...a); try { return r ? JSON.parse(r) : null; } catch (e) { return null; } };
@@ -30,6 +36,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.80', ['修正：失敗後按重試成功，紀錄裡會留著舊的失敗那筆（一組的會一直顯示「1 個失敗」）；現在會換成成功的', '紀錄太多、手機給的儲存空間滿了時，自動刪掉最舊的一部分再存，不會整批沒存到']],
   ['YTD_V0.1.24（外殼）／YTD_UI_V0.1.79', ['設定頁打開更快：「App 佔用空間」一分鐘內用上次算好的結果（按「清理」後會重算）']],
   ['YTD_UI_V0.1.78', ['平板橫放：下載頁變成左右兩欄（左邊貼上和選項、右邊大畫面），不用一直往下捲', '檢查更新再精簡']],
   ['YTD_UI_V0.1.77', ['紀錄搜尋：打字停一下才重新整理，紀錄多時打字不卡']],
@@ -556,7 +563,7 @@ window.onShortcut = k => {
 // =====================================================================
 const Q = [];
 let seq = 0;
-const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc', 'doneAt', 'grp', 'grpN'];
+const KEEP = ['id', 'pid', 'url', 'q', 'site', 'ab', 'title', 'thumb', 'playlist', 'subs', 'embed', 'sponsor', 'chapters', 'section', 'k', 'state', 'pct', 'files', 'msg', 't', 'took', 'res', 'uploader', 'bulk', 'uid', 'hdSrc', 'doneAt', 'grp', 'grpN', 'badSaved'];
 function saveQ() { LS('queue', Q.slice(0, 60).map(j => { const o = {}; KEEP.forEach(k => o[k] = j[k]); return o; })); }
 function enqueue(url, q, inf, x) {
   x = x || {};
@@ -740,7 +747,7 @@ window.onDone = s => {
   j.files = p.files || []; j.msg = p.ok ? '' : (p.msg === '已取消' ? '已取消' : friendly(p.msg, j.site)); j.raw = p.msg || '';
   if (!j.title && j.files[0]) j.title = j.files[0].name.replace(/\.[^.]+$/, '');
   if (p.ok && j.t0) j.took = Math.round((Date.now() - j.t0) / 1000);
-  if (j.state !== 'cancel') saveHist(j);
+  if (j.state !== 'cancel') { saveHist(j); if (j.grp) j.badSaved = j.state === 'bad'; }
   if (p.ok && S.vibe) call('vibrate', 60);
   if (j.site === 'Instagram') igPace();
   j.doneAt = Date.now();
@@ -1155,7 +1162,7 @@ function saveHist(j) {
     if (h) {
       h.t = Date.now(); h.us = [...new Set([...hUrls(h), j.url])];
       h.files = [...(h.files || []), ...(j.files || [])].slice(0, 800);
-      if (ok) h.nOk = (h.nOk || 0) + 1; else { h.nBad = (h.nBad || 0) + 1; h.msg = ((h.msg ? h.msg + '\n' : '') + (j.title || j.url) + '：' + (j.msg || '失敗')).slice(-3000); }
+      if (ok) { h.nOk = (h.nOk || 0) + 1; if (j.badSaved) h.nBad = Math.max(0, (h.nBad || 0) - 1); } else if (j.badSaved) return; else { h.nBad = (h.nBad || 0) + 1; h.msg = ((h.msg ? h.msg + '\n' : '') + (j.title || j.url) + '：' + (j.msg || '失敗')).slice(-3000); }
       h.ok = (h.nOk || 0) > 0;
       if (!h.title0 && j.title) h.title0 = j.title;
       h.title = grpTitle(h);
@@ -1169,6 +1176,7 @@ function saveHist(j) {
       ok, nOk: ok ? 1 : 0, nBad: ok ? 0 : 1, msg: ok ? '' : (j.title || j.url) + '：' + (j.msg || '失敗'), files: (j.files || []).slice(0, 800) };
     g.title = grpTitle(g); H.unshift(g); LS('hist', H.slice(0, 1500)); return;
   }
+  const old = H.findIndex(x => !x.grp && !x.ok && x.u === j.url); if (old >= 0) H.splice(old, 1);   // 重試：舊的失敗紀錄換掉，不留兩筆
   H.unshift({ t: Date.now(), u: j.url, title: j.title, thumb: j.thumb, site: j.site, ab: j.ab, q: j.q, res: j.res || 0, uploader: j.uploader || '', uid: j.uid || '', ok, msg: j.msg, files: (j.files || []).slice(0, 20) });
   LS('hist', H.slice(0, 1500));
 }
