@@ -370,3 +370,8 @@ video.thumb{object-fit:cover;background:#000;pointer-events:none}
 .adv>summary::after{content:"展開 ▾";font-size:12px;color:var(--mut)}
 .adv[open]>summary::after{content:"收起 ▴"}
 .adv>summary+.item{border-top:1px solid var(--line)}
+.stage.batch,.stage.bare{height:auto;min-height:150px;padding:22px 0;background:var(--surf);border:1px solid var(--line)}
+.stage.batch .st-over,.stage.bare .st-over{color:var(--fg)}
+.stage.batch .st-over .bar,.stage.bare .st-over .bar{background:var(--surf2)}
+.stage.empty{height:auto;min-height:120px}
+.ql-t,div.thumb{background:var(--surf2)}

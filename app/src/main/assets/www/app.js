@@ -1,7 +1,7 @@
 // YT Download 畫面（熱更新會換掉這個檔）
 // 原生那邊：window.YTD。回呼：onProg onDone onInfo onExec onHttp onBrowse onTree onPicked onApk onUpd onCore onShare onShortcut onResume onToast onBack
 'use strict';
-const UI_VER = 'YTD_UI_V0.1.66';
+const UI_VER = 'YTD_UI_V0.1.67';
 const N = window.YTD || null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -29,6 +29,7 @@ fitWin(); addEventListener('resize', fitWin);
 
 // ---------- 更新紀錄（設定 → 關於）
 const CHANGELOG = [
+  ['YTD_UI_V0.1.67', ['平台頁：IG、FB 拿掉「App 內登入」，只留貼代碼', '下載頁：一次好幾個、或還沒有縮圖時，進度改成一塊小卡片，不再佔掉大半個畫面的黑框；進度百分比不重複顯示', '沒縮圖的小格改成深灰底']],
   ['YTD_UI_V0.1.66', ['設定頁簡化：只留常用的 6 項＋手機權限，其他收進「進階設定」（點一下展開）；「有網址就自動下載」和「回到 App 抓剪貼簿」合成一個開關', '更新頁簡化：只剩「檢查更新」和下載核心，手動更新收起來；更新紀錄只顯示最近 3 版', '紀錄每一筆只留「分享」和「⋯」，其他（再下載、複製連結、刪檔案、刪紀錄）在 ⋯ 裡；點縮圖就播放', '主要按鈕改成暗藍色（原本是白色），晚上看不刺眼']],
   ['YTD_V0.1.19（外殼）／YTD_UI_V0.1.65', ['程式瘦身：拿掉已經不用的「剪貼簿提示條」「連續收集」「🎛 轉盤」「左邊上一則／下一則」和舊外殼的相容程式，畫面更乾淨、反應更快（上下滑換一則照舊）', '更新紀錄只留最近的，太舊的合成一行']],
   ['YTD_V0.1.18（外殼）／YTD_UI_V0.1.64', ['瘦身：下載到一半被手機關掉留下的暫存、Telegram 抓檔的快取、裝完的更新檔，現在開 App 和每次下載全部做完都會自動清掉（下載好的影片本來就在「下載／相簿」，不受影響）', '設定 → 其他：看得到 App 佔用多少空間，也可以按「清理暫存」馬上清']],
@@ -170,7 +171,7 @@ function friendly(m, site) {
   m = String(m || '');
   const igDet = (m.match(/\[\d+\][^]*$/) || [''])[0].trim();
   if (/IG_RATE/.test(m)) return 'IG 暫時擋住了（太頻繁），等 10 分鐘以上再試。' + (igDet ? `（IG 回應 ${igDet}）` : '');
-  if (/IG_LOGIN/.test(m)) return 'IG 不認這組登入資料。到「平台」→ Instagram：按「重貼」貼新的 sessionid；或按「登出」後用「App 內登入」。' + (igDet ? `（IG 回應 ${igDet}）` : '');
+  if (/IG_LOGIN/.test(m)) return 'IG 不認這組登入資料。到「平台」→ Instagram：按「重貼」貼新的 sessionid；。' + (igDet ? `（IG 回應 ${igDet}）` : '');
 
   if (/TG_LOGIN/.test(m)) return 'Telegram 還沒登入，到「平台」→ Telegram 登入你的帳號。';
   if (/TG_NOMSG/.test(m)) return 'Telegram 找不到這則訊息（可能被刪了，或是私人頻道你沒有加入）。';
@@ -740,8 +741,8 @@ function trimDone() {
   F.forEach(j => { if (j === keep) return; const i = Q.indexOf(j); if (i >= 0) Q.splice(i, 1); });
   drawStage(); counts();
 }
-function stText(j) {
-  if (j.state === 'run') return j.stage || [j.pct ? j.pct.toFixed(1) + '%' : '', j.size, j.speed, j.eta ? '剩 ' + fmtEta(j.eta) : '', j.item ? '第 ' + j.item + ' 個' : ''].filter(Boolean).join(' · ');
+function stText(j, noPct) {
+  if (j.state === 'run') return j.stage || [j.pct && !noPct ? j.pct.toFixed(1) + '%' : '', j.size, j.speed, j.eta ? '剩 ' + fmtEta(j.eta) : '', j.item ? '第 ' + j.item + ' 個' : ''].filter(Boolean).join(' · ');
   if (j.state === 'wait') { const r = Math.round((igNext - Date.now()) / 1000); return netWait ? '等 Wi-Fi（設定裡開了只用 Wi-Fi）' : (j.site === 'Instagram' && S.igSlow && r > 6) ? `休息中，約 ${r >= 60 ? Math.ceil(r / 60) + ' 分鐘' : r + ' 秒'}後繼續（慢慢抓，避免被 IG 擋）` : '等前面的下載完'; }
   if (j.state === 'ok') return '已存到 ' + (j.files[0] ? j.files[0].path : '') + (j.files.length > 1 ? `（共 ${j.files.length} 個檔）` : '') + (j.took ? ' · 花了 ' + fmtEta(j.took) : '');
   return j.msg;
@@ -804,7 +805,7 @@ function drawStage() {
   if (key !== stg.key) {
     autoStop();
     stg.id = j.id; stg.key = key;
-    el.className = 'stage ' + j.state;
+    el.className = 'stage ' + j.state + (M.length || j.thumb ? '' : ' bare');
     let m = '';
     if (M.length) {
       const f = M[stg.idx];
@@ -829,7 +830,7 @@ function drawStage() {
   const pct = j.state === 'run' ? Math.max(0, j.pct || 0) : 0;
   const bar = el.querySelector('.bar i'); if (bar) bar.style.width = (j.state === 'run' ? Math.max(2, pct) : j.state === 'wait' ? 0 : 100) + '%';
   const pp = el.querySelector('.st-pct'); if (pp) pp.textContent = j.state === 'run' ? (pct ? Math.round(pct) + '%' : '…') : j.state === 'wait' ? '排隊中' : j.state === 'bad' ? '失敗' : '已取消';
-  const tt = el.querySelector('.st-txt'); if (tt) tt.textContent = j.state === 'bad' || j.state === 'cancel' ? '' : stText(j);
+  const tt = el.querySelector('.st-txt'); if (tt) tt.textContent = j.state === 'bad' || j.state === 'cancel' ? '' : stText(j, 1);
   const st = $('#stageSt'); if (st) st.textContent = j.state === 'run' || j.state === 'wait' ? '' : stText(j);
 }
 const stageKey = (j, M) => [j.id, j.state, M.length, stg.idx, j.thumb || '', j.title || '', netWait].join('|');
@@ -1232,7 +1233,7 @@ function drawSites() {
     return `<div class="site" data-i="${i}"><span class="badge">${esc(s.ab)}</span>
       <span class="site-b" data-a="home"><span class="site-n">${esc(s.k)}</span> <span class="lv ${s.lv}">${s.lv === 'g' ? '穩定' : '有時失敗'}</span>
       ${logged ? `<span class="ok-t"> · 已登入 ${fmtTime(c.time)}</span>` : ''}<span class="site-d" style="display:block">${esc(s.note)}</span></span>
-      <span class="site-acts">${s.tg && has('tgInfo') ? (tgS.state === 'ready' ? '<button class="btn sm ghost" data-a="tgOut" type="button">登出</button>' : '<button class="btn sm" data-a="tgOpen" type="button">登入</button>') : ''}${s.ck && canLogin ? (logged ? '<button class="btn sm ghost" data-a="code" type="button">重貼</button><button class="btn sm ghost" data-a="logout" type="button">登出</button>' : (s.codeOnly ? '<button class="btn sm" data-a="code" type="button">貼代碼</button><button class="btn sm ghost" data-a="login" type="button">App 內登入</button>' : '<button class="btn sm" data-a="login" type="button">登入</button><button class="btn sm ghost" data-a="code" type="button">貼代碼</button>')) : ''}</span></div>
+      <span class="site-acts">${s.tg && has('tgInfo') ? (tgS.state === 'ready' ? '<button class="btn sm ghost" data-a="tgOut" type="button">登出</button>' : '<button class="btn sm" data-a="tgOpen" type="button">登入</button>') : ''}${s.ck && canLogin ? (logged ? '<button class="btn sm ghost" data-a="code" type="button">重貼</button><button class="btn sm ghost" data-a="logout" type="button">登出</button>' : (s.codeOnly ? '<button class="btn sm" data-a="code" type="button">貼代碼</button>' : '<button class="btn sm" data-a="login" type="button">登入</button><button class="btn sm ghost" data-a="code" type="button">貼代碼</button>')) : ''}</span></div>
       ${s.tg && tgOpen && has('tgInfo') && tgS.state !== 'ready' ? tgBox() : ''}${s.tg && tgS.state === 'ready' ? `<div class="mut small" style="padding:0 4px">已登入 Telegram${tgS.me ? '：' + esc(tgS.me) : ''}</div>` : ''}
       ${codeFor === i ? `<div class="codebox" data-i="${i}"><span class="mut small">${CK_CODE[s.ck] ? `電腦瀏覽器登入 ${esc(s.k)} → 按 F12 → Application（應用程式）→ 左邊 Cookies → 找到 <b>${CK_CODE[s.ck]}</b>，複製它的 Value 貼到這裡。也可以貼整串「名稱=值; 名稱=值」。` : `電腦瀏覽器登入 ${esc(s.k)} → 按 F12 → Network → 點任一個請求 → 把 Cookie 那一整串貼到這裡（名稱=值; 名稱=值）。`}</span>
         <input id="codeIn" type="text" autocomplete="off" spellcheck="false" placeholder="${CK_CODE[s.ck] ? '貼上 ' + CK_CODE[s.ck] + ' 的值' : '貼上整串 Cookie'}">
@@ -1256,7 +1257,7 @@ $('#sites').onclick = e => {
   if (b.dataset.a === 'codeNo') { codeFor = -1; drawSites(); return; }
   if (b.dataset.a === 'codeSave') { if (saveCode(s, $('#codeIn').value)) { codeFor = -1; drawSites(); toast(`${s.k} 的登入資料已儲存`); } return; }
   if (b.dataset.a === 'home') { if (has('browse')) N.browse(s.home, 'browse', '', ''); else call('openUrl', s.home); }
-  else if (b.dataset.a === 'login') { N.browse(s.codeOnly ? s.home : s.login, 'login', s.ck, s.dom); toast(s.codeOnly ? '看到自己的帳號後，按右上角「完成登入」' : '登入後按右上角「完成登入」', 4500); }
+  else if (b.dataset.a === 'login') { N.browse(s.login, 'login', s.ck, s.dom); toast('登入後按右上角「完成登入」', 4500); }
   else if (b.dataset.a === 'logout') { N.clearCookies(s.ck); drawSites(); toast(`${s.k} 已登出`); }
 };
 function saveCode(s, text) {
